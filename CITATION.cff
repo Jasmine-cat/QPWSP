@@ -1,0 +1,8 @@
+﻿cff-version: 1.2.0
+title: "QUBO-PIGNN Sensor Placement for Water Distribution Networks"
+message: "If you use this code, please cite the associated manuscript once available."
+authors:
+  - family-names: "Ma"
+    given-names: "Chunwei"
+version: "0.1.0"
+date-released: "2026-06-27"

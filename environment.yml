@@ -1,0 +1,18 @@
+﻿name: qubo-pignn
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - numpy
+  - pandas
+  - scipy
+  - matplotlib
+  - networkx
+  - pyyaml
+  - scikit-learn
+  - pytorch
+  - pip
+  - pip:
+      - wntr

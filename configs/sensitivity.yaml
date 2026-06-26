@@ -1,0 +1,8 @@
+﻿# Placeholder configuration for sensitivity.yaml
+# Replace TODO values with finalized experiment settings before public release.
+experiment:
+  name: TODO
+  seed_list: [0, 11, 22, 33, 44, 55, 66, 77, 88, 99]
+paths:
+  data_dir: data
+  result_dir: results

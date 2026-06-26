@@ -1,0 +1,9 @@
+﻿numpy
+pandas
+scipy
+matplotlib
+networkx
+pyyaml
+scikit-learn
+wntr
+torch
