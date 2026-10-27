@@ -820,6 +820,3 @@ def load_graph_data(
     }
 
     return X, A, A_norm, node_ids, id2idx, edges_idx, df_nodes, junction_indices, junction_node_ids, graph_struct
-
-
-
