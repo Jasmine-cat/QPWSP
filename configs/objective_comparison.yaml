@@ -1,8 +1,116 @@
-﻿# Placeholder configuration for objective_comparison.yaml
-# Replace TODO values with finalized experiment settings before public release.
+extends: base.yaml
 experiment:
-  name: TODO
-  seed_list: [0, 11, 22, 33, 44, 55, 66, 77, 88, 99]
-paths:
-  data_dir: data
-  result_dir: results
+  name: objective_comparison
+  stage: objective
+  methods:
+  - A0_gnn
+response:
+  minitown_map_epynet:
+    K: 3
+    alpha_bud: 3.0
+    alpha_leak_h: 0.35
+    alpha_mvc: 0.0
+    lambda_pair: 0.75
+  Net1:
+    K: 4
+    alpha_bud: 1.0
+    alpha_leak_h: 0.25
+    alpha_mvc: 0.0
+    lambda_pair: 6.0
+  Hanoi:
+    K: 8
+    alpha_bud: 1.5
+    alpha_leak_h: 0.5
+    alpha_mvc: 0.0
+    lambda_pair: 6.0
+  Net2:
+    K: 8
+    alpha_bud: 2.0
+    alpha_leak_h: 0.5
+    alpha_mvc: 0.0
+    lambda_pair: 2.25
+  Richmond_skeleton:
+    K: 8
+    alpha_bud: 0.5
+    alpha_leak_h: 0.5
+    alpha_mvc: 0.0
+    lambda_pair: 3.0
+  CY_DMA:
+    K: 16
+    alpha_bud: 1.0
+    alpha_leak_h: 0.2
+    alpha_mvc: 0.0
+    lambda_pair: 0.375
+  Net3:
+    K: 16
+    alpha_bud: 1.5
+    alpha_leak_h: 0.5
+    alpha_mvc: 0.0
+    lambda_pair: 2.25
+  Wolf_Cordera_Ranch_wntr:
+    K: 288
+    alpha_bud: 1.0
+    alpha_leak_h: 0.2
+    alpha_mvc: 0.0
+    lambda_pair: 2.25
+  EX:
+    K: 304
+    alpha_bud: 1.0
+    alpha_leak_h: 0.25
+    alpha_mvc: 0.0
+    lambda_pair: 1.5
+mvc:
+  minitown_map_epynet:
+    K: 3
+    alpha_bud: 0.3
+    alpha_leak_h: 0.0
+    alpha_mvc: 0.25
+    lambda_pair: 0.0
+  Net1:
+    K: 4
+    alpha_bud: 0.1
+    alpha_leak_h: 0.0
+    alpha_mvc: 0.1
+    lambda_pair: 0.0
+  Hanoi:
+    K: 8
+    alpha_bud: 0.03
+    alpha_leak_h: 0.0
+    alpha_mvc: 0.1
+    lambda_pair: 0.0
+  Net2:
+    K: 8
+    alpha_bud: 0.5
+    alpha_leak_h: 0.0
+    alpha_mvc: 2.0
+    lambda_pair: 0.0
+  Richmond_skeleton:
+    K: 8
+    alpha_bud: 0.125
+    alpha_leak_h: 0.0
+    alpha_mvc: 1.0
+    lambda_pair: 0.0
+  CY_DMA:
+    K: 16
+    alpha_bud: 0.1
+    alpha_leak_h: 0.0
+    alpha_mvc: 1.0
+    lambda_pair: 0.0
+  Net3:
+    K: 16
+    alpha_bud: 0.03
+    alpha_leak_h: 0.0
+    alpha_mvc: 0.25
+    lambda_pair: 0.0
+  Wolf_Cordera_Ranch_wntr:
+    K: 288
+    alpha_bud: 0.5
+    alpha_leak_h: 0.0
+    alpha_mvc: 0.5
+    lambda_pair: 0.0
+  EX:
+    K: 304
+    alpha_bud: 0.05
+    alpha_leak_h: 0.0
+    alpha_mvc: 0.5
+    lambda_pair: 0.0

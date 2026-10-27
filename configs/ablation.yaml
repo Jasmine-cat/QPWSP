@@ -1,8 +1,59 @@
-﻿# Placeholder configuration for ablation.yaml
-# Replace TODO values with finalized experiment settings before public release.
+extends: base.yaml
 experiment:
-  name: TODO
-  seed_list: [0, 11, 22, 33, 44, 55, 66, 77, 88, 99]
-paths:
-  data_dir: data
-  result_dir: results
+  name: component_ablation
+  stage: ablation
+  networks:
+  - CY_DMA
+  - Richmond_skeleton
+  - Hanoi
+  - EX
+ablation_response:
+  CY_DMA:
+    K: 16
+    alpha_bud: 0.5
+    alpha_leak_h: 0.2
+    alpha_mvc: 0.0
+    lambda_pair: 0.375
+  EX:
+    K: 304
+    alpha_bud: 0.5
+    alpha_leak_h: 0.25
+    alpha_mvc: 0.0
+    lambda_pair: 1.5
+  Hanoi:
+    K: 8
+    alpha_bud: 0.75
+    alpha_leak_h: 0.5
+    alpha_mvc: 0.0
+    lambda_pair: 6.0
+  Richmond_skeleton:
+    K: 8
+    alpha_bud: 0.25
+    alpha_leak_h: 0.5
+    alpha_mvc: 0.0
+    lambda_pair: 3.0
+ablation_mvc:
+  CY_DMA:
+    K: 16
+    alpha_bud: 0.05
+    alpha_leak_h: 0.0
+    alpha_mvc: 1.0
+    lambda_pair: 0.0
+  EX:
+    K: 304
+    alpha_bud: 0.025
+    alpha_leak_h: 0.0
+    alpha_mvc: 0.5
+    lambda_pair: 0.0
+  Hanoi:
+    K: 8
+    alpha_bud: 0.06
+    alpha_leak_h: 0.0
+    alpha_mvc: 0.1
+    lambda_pair: 0.0
+  Richmond_skeleton:
+    K: 8
+    alpha_bud: 0.0625
+    alpha_leak_h: 0.0
+    alpha_mvc: 1.0
+    lambda_pair: 0.0

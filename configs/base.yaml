@@ -1,0 +1,99 @@
+experiment:
+  name: main_response
+  seed_list:
+  - 0
+  - 11
+  - 22
+  - 33
+  - 44
+  - 55
+  - 66
+  - 77
+  - 88
+  - 99
+  networks:
+  - minitown_map_epynet
+  - Net1
+  - Hanoi
+  - Net2
+  - Richmond_skeleton
+  - CY_DMA
+  - Wolf_Cordera_Ranch_wntr
+  - EX
+paths:
+  networks: data/networks
+  features: data/features
+  assets: outputs/assets
+  results: outputs/experiments
+optimizers:
+- method: A0_gnn
+  cfg:
+    hidden_dim: 64
+    num_layers: 2
+    dropout: 0.0
+    use_physics_injection: true
+    use_physics_gate: false
+    use_stagewise_ste: true
+    ste_stage1_ratio: 0.1
+    ebin_patience: 120
+    ebin_min_delta: 1.0e-08
+    ebin_min_evals_stage2: 80
+    lr: 0.0001
+    max_epochs: 20000
+    num_restarts: 1
+    min_epochs: 600
+    ema_window: 50
+    rel_tol: 0.001
+    plateau_patience: 40
+    lr_factor: 0.5
+    min_lr: 1.0e-05
+    grad_clip_norm: 1.0
+    print_every: 200
+- method: A1_qubo
+  cfg:
+    max_iters: 10000
+    max_iters_per_restart: 10000
+    zero_sample: 20
+    num_restarts: 80
+    min_restarts: 5
+    max_restarts: 80
+    restart_patience: 12
+    restart_improve_tol: 1.0e-10
+    time_budget_sec: null
+- method: A2_ga
+  cfg:
+    pop_size: 80
+    max_iters: 2500
+    mut_rate: 0.02
+    time_budget_sec: null
+    early_stop_patience: 200
+    early_stop_min_iters: 200
+    early_stop_abs_tol: 1.0e-08
+- method: A4_greedy_swap
+  cfg:
+    time_budget_sec: null
+    swap_max_rounds: 30
+    swap_zero_sample: null
+    improve_tol: 1.0e-12
+    random_tie_break: true
+    keep_histories: true
+- method: A5_de
+  cfg:
+    pop_size: 80
+    max_iters: 1000
+    F: 0.5
+    CR: 0.9
+    time_budget_sec: null
+    early_stop_patience: 200
+    early_stop_min_iters: 200
+    early_stop_abs_tol: 1.0e-08
+hydraulics:
+  h_ref_factor: 0.2
+  h_recovery_factors:
+  - 0.5
+  - 0.3
+  - 0.1
+  rs_n_levels: 4
+  rs_factor_min: 0.25
+  rs_factor_max: 2.0
+  rs_group_retry_factor: 0.1

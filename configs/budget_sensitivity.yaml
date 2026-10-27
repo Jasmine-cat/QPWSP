@@ -1,0 +1,27 @@
+extends: base.yaml
+experiment:
+  name: budget_sensitivity
+  stage: budget
+  networks:
+  - CY_DMA
+  - Richmond_skeleton
+  - Hanoi
+  - EX
+  seed_list: null
+budget_response:
+  CY_DMA:
+    alpha_bud: 1.0
+    alpha_leak_h: 0.2
+    lambda_pair: 0.375
+  Richmond_skeleton:
+    alpha_bud: 0.5
+    alpha_leak_h: 0.5
+    lambda_pair: 3.0
+  Hanoi:
+    alpha_bud: 1.5
+    alpha_leak_h: 0.5
+    lambda_pair: 6.0
+  EX:
+    alpha_bud: 1.0
+    alpha_leak_h: 0.25
+    lambda_pair: 1.5

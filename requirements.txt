@@ -1,9 +1,9 @@
-﻿numpy
+numpy
 pandas
 scipy
-matplotlib
 networkx
-pyyaml
-scikit-learn
-wntr
+PyYAML
 torch
+wntr
+epynet
+pyarrow
