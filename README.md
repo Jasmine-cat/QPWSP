@@ -59,6 +59,8 @@ python run.py budget --nets Hanoi --seeds 0
 
 The fixed files in `configs/` contain the adopted settings only. `base.yaml` holds shared settings; the other four files retain the differences required by each experiment.
 
+The optional demand-bias term is retained with `optional_objective.alpha_demand: 0.0` (off). A nonzero coefficient enables the historical diagonal cost `alpha_demand / N * (1 - w_i)`, where junction base demands are clipped at the 95th percentile of positive values and normalized to `[0, 1]`. Set the coefficient in a copied configuration to run this optional variant. Enabling it changes the placement objective; the adopted profiles leave it off.
+
 Use `--show-config` to inspect resolved settings and `--help` for arguments. Without overrides, algorithm comparison uses its ten configured seeds; budget sensitivity uses its network-specific six-seed schedule. Main comparison has the additional scalar physics gate off; component ablation retains its own variants and weights.
 
 H/R/S assets, layouts and metric CSVs are generated under Git-ignored `outputs/`. No intermediate or historical result files are distributed. Existing outputs are not silently overwritten: use a fresh `--assets-dir` or `--output-dir`. Preparation requires a fresh feature directory when calibration already exists. Algorithm/objective comparison supports custom input directories; ablation and budget sensitivity use `data/networks/` and `data/features/`.

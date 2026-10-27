@@ -1,3 +1,6 @@
+optional_objective:
+  alpha_demand: 0.0
+  demand_clip_quantile: 0.95
 experiment:
   name: main_response
   seed_list:

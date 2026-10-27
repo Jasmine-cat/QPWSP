@@ -64,7 +64,7 @@ def _variant_cfg(variant: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 
-def main(output_dir=None, assets_dir=None, networks=None, seeds=None) -> None:
+def main(output_dir=None, assets_dir=None, networks=None, seeds=None, objective_options=None) -> None:
     global OUT_DIR
     OUT_DIR = Path(output_dir) if output_dir is not None else ROOT / "outputs" / "experiments" / "ablation"
     assets_dir = Path(assets_dir) if assets_dir is not None else ROOT / "outputs" / "assets"
@@ -77,6 +77,7 @@ def main(output_dir=None, assets_dir=None, networks=None, seeds=None) -> None:
 
         for variant in VARIANTS:
             params = _objective_params(net, str(variant["objective"]))
+            params.update(objective_options or {})
             out_csv = OUT_DIR / f"exp_metrics_{net}_{variant['variant']}.csv"
             run_multiple_budgets(
                 budgets=[int(RESPONSE_ANCHORS[net]["K"])],

@@ -24,14 +24,15 @@ TOP_SEEDS = {
 
 
 
-def main(output_dir=None, assets_dir=None, networks=None, seeds=None) -> None:
+def main(output_dir=None, assets_dir=None, networks=None, seeds=None, objective_options=None) -> None:
     global OUT_DIR
     OUT_DIR = Path(output_dir) if output_dir is not None else ROOT / "outputs" / "experiments" / "budget"
     assets_dir = Path(assets_dir) if assets_dir is not None else ROOT / "outputs" / "assets"
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     detail_paths: List[Path] = []
     for net in (networks or RESPONSE_ANCHORS):
-        anchor = RESPONSE_ANCHORS[net]
+        anchor = dict(RESPONSE_ANCHORS[net])
+        anchor.update(objective_options or {})
         from src.data.residual_assets import load_residual_assets
         n_junc = len(load_residual_assets(assets_dir / f"{net}_RS.npz").sensor_ids)
         budgets = sorted({max(1, min(n_junc, int(round(n_junc * ratio / 10.0)))) for ratio in range(1, 11)})

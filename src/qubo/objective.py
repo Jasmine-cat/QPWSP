@@ -7,12 +7,14 @@ from typing import Any, Dict, Optional, Sequence, Tuple
 import numpy as np
 
 from src.data.response_stats import compute_leak_importance_and_redundancy_from_H
+from src.qubo.demand import normalize_demand_clip, build_Q_size_demand
 
 
 QUBO_COMPONENT_SPECS = (
     ("cov", "Q_cov", ("c_cov", "const_cov")),
     ("bud", "Q_budget", ("c_budget", "const_budget", "const_bud")),
     ("leak", "Q_leak", ("c_leak", "const_leak")),
+    ("demand", "Q_demand", ("c_demand",)),
 )
 
 
@@ -91,7 +93,7 @@ def compute_qubo_component_stats(
 
 
 def print_qubo_component_stats(label: str, stats: Dict[str, float]) -> None:
-    """输出正式实验的 ``cov/bud/leak`` 完整能量分布。"""
+    """输出各启用目标分量的完整能量分布。"""
     values = {name: float(stats[f"energy_{name}_full"]) for name, _, _ in QUBO_COMPONENT_SPECS}
     total = sum(abs(v) for v in values.values())
     text = "  ".join(
@@ -213,9 +215,12 @@ def build_Q_total(
     alpha_bud: float = 1.0,
     alpha_leak_h: float = 0.0,
     alpha_mvc: float = 0.0,
+    alpha_demand: float = 0.0,
+    demand_junc: Optional[np.ndarray] = None,
+    demand_clip_quantile: float = 0.95,
     lambda_pair: float = 2.25,
 ) -> Tuple[Dict[str, np.ndarray], Dict[str, float]]:
-    """组装正式实验的预算、H-response 和 MVC-type 三类 QUBO 分量。"""
+    """组装预算、H-response、MVC及默认关闭的需求偏置项。"""
     N, K = int(N), int(K_budget)
     if N <= 0 or K <= 0:
         raise ValueError(f"invalid N={N}, K_budget={K}")
@@ -223,6 +228,7 @@ def build_Q_total(
     Q_budget = np.zeros((N, N), dtype=float)
     Q_cov = np.zeros((N, N), dtype=float)
     Q_leak = np.zeros((N, N), dtype=float)
+    Q_demand = np.zeros((N, N), dtype=float)
     c_budget = c_cov = c_leak = 0.0
 
     if float(alpha_bud) != 0.0:
@@ -244,19 +250,34 @@ def build_Q_total(
             lambda_pair=float(lambda_pair),
         )
 
-    Q_total = _symmetrize_checked(Q_budget + Q_cov + Q_leak, "build_Q_total")
+    if not np.isfinite(alpha_demand):
+        raise ValueError("alpha_demand must be finite")
+    if float(alpha_demand) != 0.0:
+        if demand_junc is None:
+            raise ValueError("demand_junc is required when alpha_demand is non-zero")
+        demand = np.asarray(demand_junc, dtype=float).reshape(-1)
+        if demand.size != N or not np.isfinite(demand).all():
+            raise ValueError("demand_junc must be finite and aligned with the QUBO rows")
+        if not 0 < float(demand_clip_quantile) <= 1:
+            raise ValueError("demand_clip_quantile must be in (0, 1]")
+        weights, _ = normalize_demand_clip(demand, clip_q=float(demand_clip_quantile))
+        Q_demand, _ = build_Q_size_demand(N, weights, lambda_dem=float(alpha_demand))
+
+    Q_total = _symmetrize_checked(Q_budget + Q_cov + Q_leak + Q_demand, "build_Q_total")
     c_total = float(c_budget + c_cov + c_leak)
     return {
         "Q_total": Q_total,
         "Q_budget": Q_budget,
         "Q_cov": Q_cov,
         "Q_leak": Q_leak,
+        "Q_demand": Q_demand,
     }, {
         "c_total": c_total,
         "const": c_total,
         "c_budget": float(c_budget),
         "c_cov": float(c_cov),
         "c_leak": float(c_leak),
+        "c_demand": 0.0,
         "const_bud": float(c_budget),
         "const_budget": float(c_budget),
         "const_cov": float(c_cov),

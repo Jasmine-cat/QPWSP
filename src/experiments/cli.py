@@ -74,7 +74,8 @@ def main():
             module.MVC_ANCHORS = profile["ablation_mvc"]
         else:
             module.RESPONSE_ANCHORS = profile["budget_response"]
-        module.main(output_dir=output_dir / stage, assets_dir=assets_dir, networks=nets, seeds=seeds)
+        module.main(output_dir=output_dir / stage, assets_dir=assets_dir, networks=nets, seeds=seeds,
+                    objective_options=profile.get("optional_objective", {}))
         return
     from src.optimization.runner import run_multiple_budgets
     cfg = copy.deepcopy(profile["optimizers"])
@@ -83,6 +84,8 @@ def main():
     for net in nets:
         for objective in (["response", "mvc"] if stage == "objective" else ["response"]):
             settings = copy.deepcopy(profile[objective][net])
+            for key, value in profile.get("optional_objective", {}).items():
+                settings.setdefault(key, value)
             k = settings.pop("K")
             out = output_dir / stage / f"{net}_{objective}.csv"
             run_multiple_budgets(
