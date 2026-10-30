@@ -1,4 +1,6 @@
 extends: base.yaml
+information:
+  bins: 16
 experiment:
   name: objective_comparison
   stage: objective

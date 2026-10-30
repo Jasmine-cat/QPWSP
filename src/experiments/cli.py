@@ -15,6 +15,8 @@ def main():
     parser.add_argument("--nets", nargs="+")
     parser.add_argument("--seeds", type=int, nargs="+")
     parser.add_argument("--methods", nargs="+")
+    parser.add_argument("--objectives", nargs="+", choices=["response", "mvc", "information"],
+                        help="Objective stage only; information reuses the existing H without simulation.")
     parser.add_argument("--inp-dir", type=Path)
     parser.add_argument("--features-dir", type=Path)
     parser.add_argument("--assets-dir", type=Path)
@@ -23,6 +25,8 @@ def main():
     parser.add_argument("--show-config", action="store_true")
     args = parser.parse_args()
     stage = args.stage
+    if args.objectives is not None and stage != "objective":
+        parser.error("--objectives is only supported by the objective stage.")
     profiles = {"prepare": "base.yaml", "assets": "base.yaml",
                 "compare": "optimizer_comparison.yaml", "objective": "objective_comparison.yaml",
                 "ablation": "ablation.yaml", "budget": "budget_sensitivity.yaml"}
@@ -77,12 +81,28 @@ def main():
         module.main(output_dir=output_dir / stage, assets_dir=assets_dir, networks=nets, seeds=seeds,
                     objective_options=profile.get("optional_objective", {}))
         return
-    from src.optimization.runner import run_multiple_budgets
     cfg = copy.deepcopy(profile["optimizers"])
     if args.physics_gate is not None:
         next(item["cfg"] for item in cfg if item["method"] == "A0_gnn")["use_physics_gate"] = args.physics_gate == "on"
     for net in nets:
-        for objective in (["response", "mvc"] if stage == "objective" else ["response"]):
+        objectives = (args.objectives or ["response", "mvc"]) if stage == "objective" else ["response"]
+        if stage == "objective" and len(set(objectives)) > 1:
+            if profile["response"][net]["K"] != profile["mvc"][net]["K"]:
+                raise ValueError(f"Objective-comparison sensor budgets differ for {net}.")
+        for objective in dict.fromkeys(objectives):
+            if objective == "information":
+                from src.experiments.objective import run_information_comparison
+                options = profile.get("information", {})
+                run_information_comparison(
+                    nodes_csv=features_dir / f"{net}_node_features.csv",
+                    inp_path=inp_dir / f"{net}.inp", H_path=assets_dir / f"{net}_H.npz",
+                    rs_asset_path=assets_dir / f"{net}_RS.npz",
+                    K_budget=profile["response"][net]["K"],
+                    out_csv=output_dir / stage / f"{net}_information.csv",
+                    bins=options.get("bins", 16),
+                )
+                continue
+            from src.optimization.runner import run_multiple_budgets
             settings = copy.deepcopy(profile[objective][net])
             for key, value in profile.get("optional_objective", {}).items():
                 settings.setdefault(key, value)
