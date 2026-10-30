@@ -1,6 +1,10 @@
 extends: base.yaml
 information:
   bins: 16
+  sampled_design:
+    leak_fraction: 0.3333333333333333
+    strength_range: [0.25, 2.0]
+    strength_levels: 3
 experiment:
   name: objective_comparison
   stage: objective

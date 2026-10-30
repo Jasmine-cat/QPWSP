@@ -90,6 +90,18 @@ Building a fresh H normally requires one no-leak baseline plus one leak simulati
 
 The response and MVC profiles use seeds **0, 11, 22, 33, 44, 55, 66, 77, 88, 99**. Given a fixed H, information selection is deterministic and runs once per network; `--seeds` affects only the stochastic optimizers. Its CSV has an empty seed and `repetition=fixed_design`. Do not count copies of this layout as independent seed repeats. Results include raw SR/MRR/TE/ETE, all1-relative metrics, the H fingerprint and zero additional design simulations, with layout and ranking files beside the CSV. All outputs remain local under the selected output directory.
 
+For the optional multi-strength design comparison:
+
+```bash
+python run.py objective --nets Hanoi --objectives information information_sampled --simulation-workers 4
+```
+
+The `information_sampled` route samples approximately one third of the leak locations without replacement for each configured seed. It simulates three fixed leakage magnitudes at each sampled location and keeps every sensor candidate. The three magnitudes are the equal-width stratum midpoints of `[0.25, 2] × q0`: approximately `0.5417, 1.125, 1.7083 × q0`. Timing and the nominal flow scale come from the paired H metadata. Leaks use constant additional demand. Quantization is fitted separately on each seed's design pressures, using the same 16 bins. Selection never reads R/S pressures, and the evaluation retains the full leak dictionary.
+
+Each layout can access approximately N design cases, specifically `3 × round(N/3)` with at least two leak classes. The seed controls sampled leak locations; it does not introduce randomness into ranking. Repeated node/magnitude cases are cached across seeds, so unique simulation calls can be lower than the sum of the per-layout design budgets. Both quantities are recorded in the design manifest. A group recovery, if needed, repeats the design at a lower common flow scale and is counted as additional simulation cost. Failed simulations remain missing; a leak class is used only when all three magnitudes are valid, and more than 30% incomplete sampled locations stops that comparison.
+
+This arm changes both location coverage and intensity coverage relative to the full-H arm. Their difference therefore measures the combined design-data choice, not the isolated effect of adding multiple strengths. H-response can reuse its archived layouts; neither information route requires PIGNN training. The generated design pressures, seed layouts and metrics stay under the chosen output directory.
+
 ## Citation
 
 See `CITATION.cff`. Third-party input data are not bundled. No open-source license has been selected for this repository.

@@ -15,8 +15,9 @@ def main():
     parser.add_argument("--nets", nargs="+")
     parser.add_argument("--seeds", type=int, nargs="+")
     parser.add_argument("--methods", nargs="+")
-    parser.add_argument("--objectives", nargs="+", choices=["response", "mvc", "information"],
-                        help="Objective stage only; information reuses the existing H without simulation.")
+    parser.add_argument("--objectives", nargs="+", choices=["response", "mvc", "information", "information_sampled"],
+                        help="Objective stage only; choose H-based or sampled multi-strength information selection.")
+    parser.add_argument("--simulation-workers", type=int, default=4)
     parser.add_argument("--inp-dir", type=Path)
     parser.add_argument("--features-dir", type=Path)
     parser.add_argument("--assets-dir", type=Path)
@@ -89,18 +90,36 @@ def main():
         if stage == "objective" and len(set(objectives)) > 1:
             if profile["response"][net]["K"] != profile["mvc"][net]["K"]:
                 raise ValueError(f"Objective-comparison sensor budgets differ for {net}.")
+        info_context = None
         for objective in dict.fromkeys(objectives):
-            if objective == "information":
-                from src.experiments.objective import run_information_comparison
+            if objective in ["information", "information_sampled"]:
+                from src.experiments.objective import (
+                    information_context, run_information_comparison, run_sampled_information_comparison,
+                )
                 options = profile.get("information", {})
-                run_information_comparison(
+                if info_context is None:
+                    info_context = information_context(
+                        nodes_csv=features_dir / f"{net}_node_features.csv",
+                        inp_path=inp_dir / f"{net}.inp", rs_asset_path=assets_dir / f"{net}_RS.npz")
+                arguments = dict(
                     nodes_csv=features_dir / f"{net}_node_features.csv",
                     inp_path=inp_dir / f"{net}.inp", H_path=assets_dir / f"{net}_H.npz",
                     rs_asset_path=assets_dir / f"{net}_RS.npz",
                     K_budget=profile["response"][net]["K"],
-                    out_csv=output_dir / stage / f"{net}_information.csv",
-                    bins=options.get("bins", 16),
+                    out_csv=output_dir / stage / f"{net}_{objective}.csv",
+                    bins=options.get("bins", 16), context=info_context,
                 )
+                if objective == "information":
+                    run_information_comparison(**arguments)
+                else:
+                    sampled = options.get("sampled_design", {})
+                    run_sampled_information_comparison(
+                        **arguments, seeds=seeds,
+                        leak_fraction=sampled.get("leak_fraction", 1/3),
+                        strength_range=sampled.get("strength_range", [0.25, 2.0]),
+                        strength_levels=sampled.get("strength_levels", 3),
+                        workers=args.simulation_workers,
+                    )
                 continue
             from src.optimization.runner import run_multiple_budgets
             settings = copy.deepcopy(profile[objective][net])

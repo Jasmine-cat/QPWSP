@@ -89,7 +89,9 @@ def run_pressure_array(wn, node_names, *, tag="pressure", max_retries=0,
         required_time_s = getattr(wn, "_experiment_evaluation_time_s", None)
     last_error = None
     for attempt in range(max(0, int(max_retries)) + 1):
-        with tempfile.TemporaryDirectory(prefix="gnn_qubo_") as folder:
+        # Windows scanners may briefly hold report files after EPANET exits.
+        # Cleanup failure must not discard an already checked pressure result.
+        with tempfile.TemporaryDirectory(prefix="gnn_qubo_", ignore_cleanup_errors=True) as folder:
             prefix = str(Path(folder) / "simulation")
             try:
                 result = EpanetSimulator(wn).run_sim(
