@@ -2,7 +2,7 @@
 
 Code for *Leak-Localization-Oriented Pressure Sensor Placement in Water Distribution Networks Using QUBO and Physics-Informed Graph Neural Optimization*.
 
-The workflow prepares network features, generates hydraulic response assets, builds the budgeted H-response QUBO, optimizes sensor placement, and evaluates localization. Algorithm comparison, MVC objective comparison, component ablation and budget sensitivity use separate configurations.
+The workflow prepares network features, generates hydraulic response assets, builds the budgeted H-response QUBO, optimizes sensor placement, and evaluates localization. Algorithm comparison, placement-criterion comparison, component ablation and budget sensitivity use separate configurations.
 
 ## Structure
 
@@ -57,7 +57,7 @@ python run.py ablation --nets Hanoi --seeds 0
 python run.py budget --nets Hanoi --seeds 0
 ```
 
-The fixed files in `configs/` contain the recorded profiles. `base.yaml` holds shared settings; the other four files retain experiment-specific settings. The optional information comparison uses 16 bins in `objective_comparison.yaml`.
+The fixed files in `configs/` contain the recorded profiles. `base.yaml` holds shared settings; the other four files retain experiment-specific settings. The information baseline uses 16 bins in `objective_comparison.yaml`.
 
 The optional demand-bias term is retained with `optional_objective.alpha_demand: 0.0` (off). A nonzero coefficient enables the historical diagonal cost `alpha_demand / N * (1 - w_i)`, where junction base demands are clipped at the 95th percentile of positive values and normalized to `[0, 1]`. Set the coefficient in a copied configuration to run this optional variant. Enabling it changes the placement objective; the adopted profiles leave it off.
 
@@ -69,38 +69,30 @@ Fresh runs use the maintained simulation and evaluation implementation, includin
 
 ## Information-theoretic objective comparison
 
-The optional baseline implements the relevance / mean-redundancy ranking in Algorithm 1 of [Santos-Ruiz et al. (2022)](https://doi.org/10.3390/s22020443), without converting it to QUBO:
+The objective profile compares MVC, H-response and an information-theoretic (IT) placement baseline. IT follows the relevance / mean-redundancy forward ranking in Algorithm 1 of [Santos-Ruiz et al. (2022)](https://doi.org/10.3390/s22020443). It selects K sensor nodes directly, without a QUBO reformulation or PIGNN training.
 
 ```bash
-python run.py objective --nets Hanoi --objectives information
-python run.py objective --nets Hanoi --objectives response mvc information
+python run.py objective --nets Hanoi
+python run.py objective --nets Hanoi --objectives information --simulation-workers 4
 ```
 
-The default objective command still runs response and MVC only. The information route reads the same labeled `<net>_H.npz` as H-response and treats each available leak column as one sample, with the leak node as its class. All sensor rows are retained when failed H leak columns were explicitly excluded. Quantization uses 16 equal-width bins fitted on this design asset. R/S pressures are used only for the common evaluation, not selection or fitting bin boundaries.
+The adopted `information` route samples approximately one third of the eligible leak locations without replacement for each seed, then simulates three leakage magnitudes at each sampled location. The three fixed magnitudes are the equal-width stratum midpoints of `[0.25, 2] × q0`, approximately `0.5417, 1.125, 1.7083 × q0`. Timing and the network flow scale q0 come from the paired H metadata. Leaks use constant additional demand. All pressure-sensor candidates remain available, including nodes not sampled as design leaks.
 
-This is a **nominal H-based adaptation** of the published ranking criterion. The source study built a pressure dataset with multiple leak magnitudes per location; this route instead compares criteria using the existing normalized nominal responses. With one sample per class, empirical relevance equals the entropy of the discretized sensor response. It does not estimate variation within a leak class or reproduce the paper's multi-magnitude experiment. No synthetic samples, noise or additional hydraulic simulations are introduced.
+Each layout can read approximately N design cases, specifically `3 × round(N/3)` with at least two leak classes. This keeps design-simulation counts near the nominal one-leak-case-per-node H construction budget. Repeated node/magnitude cases are cached across seeds; each layout reads only its assigned subset. The manifest distinguishes per-layout information budgets from unique simulation calls across seeds and counts recovery calls separately. Failed scenarios remain missing. A leak class is used only when all three magnitudes are valid; more than 30% incomplete sampled locations stops that comparison after the documented common-flow recovery.
 
-| Design resource | H-response | Information route | MVC |
-| --- | --- | --- | --- |
-| Existing H asset | Used | Same asset | Not required |
-| Additional design simulations when H is supplied | 0 | 0 | 0 |
-| Nominal leak cases available | Available H columns | Same H columns | Topology only |
+Pressures are quantized into 16 equal-width bins (4bit), fitted separately on each seed's design data. Leak-location labels define relevance; mutual information with previously selected pressures defines redundancy. R/S pressures are used only for the shared localization evaluation, which retains all eligible test leak locations. They never fit bin boundaries or select design locations. This is a simulation-budget-controlled adaptation of the source method's multi-magnitude pressure design; sampling locations and using 16 bins are explicit experiment settings.
 
-Building a fresh H normally requires one no-leak baseline plus one leak simulation per candidate, with extra calls for failed-node recovery. This cost is incurred once per network and reused across optimization seeds. Calibration and R/S generation are common preparation/evaluation costs; they are not repeated for each placement or counted as private information-theory training data. MVC does not need hydraulic design data, so it is not assigned artificial simulation calls.
+The profile uses seeds **0, 11, 22, 33, 44, 55, 66, 77, 88, 99**. For IT, the seed controls sampled leak locations. Forward ranking is deterministic for a fixed design dataset. Outputs include raw SR/MRR/TE/ETE, all1-relative metrics, per-seed layouts and ranking traces, and the cached design pressures under the selected output directory. MVC and H-response use their recorded PIGNN settings and the same candidate sets, K and evaluation assets.
 
-The response and MVC profiles use seeds **0, 11, 22, 33, 44, 55, 66, 77, 88, 99**. Given a fixed H, information selection is deterministic and runs once per network; `--seeds` affects only the stochastic optimizers. Its CSV has an empty seed and `repetition=fixed_design`. Do not count copies of this layout as independent seed repeats. Results include raw SR/MRR/TE/ETE, all1-relative metrics, the H fingerprint and zero additional design simulations, with layout and ranking files beside the CSV. All outputs remain local under the selected output directory.
-
-For the optional multi-strength design comparison:
+An additional shared-H design comparison is available explicitly:
 
 ```bash
-python run.py objective --nets Hanoi --objectives information information_sampled --simulation-workers 4
+python run.py objective --nets Hanoi --objectives information_h
 ```
 
-The `information_sampled` route samples approximately one third of the leak locations without replacement for each configured seed. It simulates three fixed leakage magnitudes at each sampled location and keeps every sensor candidate. The three magnitudes are the equal-width stratum midpoints of `[0.25, 2] × q0`: approximately `0.5417, 1.125, 1.7083 × q0`. Timing and the nominal flow scale come from the paired H metadata. Leaks use constant additional demand. Quantization is fitted separately on each seed's design pressures, using the same 16 bins. Selection never reads R/S pressures, and the evaluation retains the full leak dictionary.
+This route transposes the labeled H asset, using each available nominal leak column as one sample and its node ID as the class. It preserves all sensor rows when failed H leak columns were excluded. With one sample per class, empirical relevance equals discretized response entropy and does not estimate variation within a leak class. It needs no new design simulations when H is supplied and produces one fixed layout per network, with an empty seed and `repetition=fixed_design`. It is retained as an additional design comparison, rather than counted as ten independent repeats.
 
-Each layout can access approximately N design cases, specifically `3 × round(N/3)` with at least two leak classes. The seed controls sampled leak locations; it does not introduce randomness into ranking. Repeated node/magnitude cases are cached across seeds, so unique simulation calls can be lower than the sum of the per-layout design budgets. Both quantities are recorded in the design manifest. A group recovery, if needed, repeats the design at a lower common flow scale and is counted as additional simulation cost. Failed simulations remain missing; a leak class is used only when all three magnitudes are valid, and more than 30% incomplete sampled locations stops that comparison.
-
-This arm changes both location coverage and intensity coverage relative to the full-H arm. Their difference therefore measures the combined design-data choice, not the isolated effect of adding multiple strengths. H-response can reuse its archived layouts; neither information route requires PIGNN training. The generated design pressures, seed layouts and metrics stay under the chosen output directory.
+Building a fresh H normally requires one no-leak baseline plus one leak simulation per candidate, with extra calls for failed-node recovery. H is prepared once and shared across optimizer seeds. MVC uses topology and needs no hydraulic design simulations. Calibration and R/S generation are common preparation/evaluation costs, separate from each method's design-data budget. No artificial calls are assigned to MVC to equalize costs.
 
 ## Citation
 

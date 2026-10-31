@@ -8,6 +8,10 @@ information:
 experiment:
   name: objective_comparison
   stage: objective
+  objectives:
+  - response
+  - mvc
+  - information
   methods:
   - A0_gnn
 response:

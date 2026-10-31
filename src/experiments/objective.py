@@ -93,17 +93,17 @@ def _save_placement(X, y, design, *, context, K_budget, bins, out_csv,
     return result
 
 
-def run_information_comparison(*, nodes_csv, inp_path, H_path, rs_asset_path,
+def run_shared_H_information_comparison(*, nodes_csv, inp_path, H_path, rs_asset_path,
                                K_budget, out_csv, bins=16, context=None):
     """Run once per fixed H design; no new hydraulic simulations."""
     if context is None:
         context = information_context(nodes_csv=nodes_csv, inp_path=inp_path, rs_asset_path=rs_asset_path)
     X, y, design = load_nominal_H_design(H_path, context["ids"])
     return _save_placement(X, y, design, context=context, K_budget=K_budget,
-                           bins=bins, out_csv=out_csv, route="information")
+                           bins=bins, out_csv=out_csv, route="information_h")
 
 
-def run_sampled_information_comparison(*, nodes_csv, inp_path, H_path, rs_asset_path,
+def run_information_comparison(*, nodes_csv, inp_path, H_path, rs_asset_path,
                                        K_budget, out_csv, seeds, bins=16,
                                        leak_fraction=1/3, strength_range=(0.25, 2.0),
                                        strength_levels=3, workers=4, context=None):
@@ -136,7 +136,7 @@ def run_sampled_information_comparison(*, nodes_csv, inp_path, H_path, rs_asset_
         X, y, design = load_sampled_design(design_path, seed, context["ids"])
         records.append(_save_placement(
             X, y, design, context=context, K_budget=K_budget, bins=bins,
-            out_csv=seed_csv, route="information_sampled", seed=seed,
+            out_csv=seed_csv, route="information", seed=seed,
         ))
     pd.DataFrame(records).to_csv(out, index=False, encoding="utf-8-sig")
     return records

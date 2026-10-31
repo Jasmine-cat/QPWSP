@@ -15,8 +15,8 @@ def main():
     parser.add_argument("--nets", nargs="+")
     parser.add_argument("--seeds", type=int, nargs="+")
     parser.add_argument("--methods", nargs="+")
-    parser.add_argument("--objectives", nargs="+", choices=["response", "mvc", "information", "information_sampled"],
-                        help="Objective stage only; choose H-based or sampled multi-strength information selection.")
+    parser.add_argument("--objectives", nargs="+", choices=["response", "mvc", "information", "information_h"],
+                        help="Objective stage only; information selects sampled multi-strength IT, information_h selects shared-H IT.")
     parser.add_argument("--simulation-workers", type=int, default=4)
     parser.add_argument("--inp-dir", type=Path)
     parser.add_argument("--features-dir", type=Path)
@@ -86,15 +86,15 @@ def main():
     if args.physics_gate is not None:
         next(item["cfg"] for item in cfg if item["method"] == "A0_gnn")["use_physics_gate"] = args.physics_gate == "on"
     for net in nets:
-        objectives = (args.objectives or ["response", "mvc"]) if stage == "objective" else ["response"]
+        objectives = (args.objectives or experiment.get("objectives", ["response", "mvc"])) if stage == "objective" else ["response"]
         if stage == "objective" and len(set(objectives)) > 1:
             if profile["response"][net]["K"] != profile["mvc"][net]["K"]:
                 raise ValueError(f"Objective-comparison sensor budgets differ for {net}.")
         info_context = None
         for objective in dict.fromkeys(objectives):
-            if objective in ["information", "information_sampled"]:
+            if objective in ["information", "information_h"]:
                 from src.experiments.objective import (
-                    information_context, run_information_comparison, run_sampled_information_comparison,
+                    information_context, run_information_comparison, run_shared_H_information_comparison,
                 )
                 options = profile.get("information", {})
                 if info_context is None:
@@ -109,11 +109,11 @@ def main():
                     out_csv=output_dir / stage / f"{net}_{objective}.csv",
                     bins=options.get("bins", 16), context=info_context,
                 )
-                if objective == "information":
-                    run_information_comparison(**arguments)
+                if objective == "information_h":
+                    run_shared_H_information_comparison(**arguments)
                 else:
                     sampled = options.get("sampled_design", {})
-                    run_sampled_information_comparison(
+                    run_information_comparison(
                         **arguments, seeds=seeds,
                         leak_fraction=sampled.get("leak_fraction", 1/3),
                         strength_range=sampled.get("strength_range", [0.25, 2.0]),
