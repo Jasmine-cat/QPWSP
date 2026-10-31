@@ -1,4 +1,4 @@
-"""Information-theoretic placement on nominal or sampled hydraulic designs."""
+"""Information-theoretic placement using sampled three-strength designs."""
 from __future__ import annotations
 
 import json
@@ -8,7 +8,7 @@ import time
 import numpy as np
 import pandas as pd
 
-from src.data.information_design import load_nominal_H_design, load_sampled_design
+from src.data.information_design import load_sampled_design
 from src.data.loaders import (
     _compute_rel_all1_metrics, _guess_edge_features_csv_from_nodes_csv,
     build_junction_hop_dist_from_edges, load_graph_data,
@@ -40,8 +40,7 @@ def information_context(*, nodes_csv, inp_path, rs_asset_path):
                 common=common, all1=all1, net=Path(inp_path).stem)
 
 
-def _save_placement(X, y, design, *, context, K_budget, bins, out_csv,
-                    route, seed=None):
+def _save_placement(X, y, design, *, context, K_budget, bins, out_csv, seed):
     out = Path(out_csv)
     layouts = out.with_name(out.stem + "_layouts")
     ranking_path = out.with_name(out.stem + "_ranking.json")
@@ -61,9 +60,9 @@ def _save_placement(X, y, design, *, context, K_budget, bins, out_csv,
            "_loc_error_dist_raw": metrics["mean_topo_error"],
            "_loc_expected_topo_error_raw": metrics["mean_expected_topo_error"],
            "_water_demand_coverage_rate_raw": metrics["water_demand_coverage_rate"]}
-    result = {"net": context["net"], "route": route,
+    result = {"net": context["net"], "route": "information",
               "method": "information_rri", "seed": seed,
-              "repetition": "fixed_design" if seed is None else "sampled_design",
+              "repetition": "sampled_design",
               "K_budget": int(K_budget), "num_sensors": int(x.sum()), "bins": int(bins),
               "runtime_opt_sec": selection_time,
               "valid_scenario_count": metrics["valid_scenario_count"],
@@ -71,9 +70,8 @@ def _save_placement(X, y, design, *, context, K_budget, bins, out_csv,
               **design, **raw, **_compute_rel_all1_metrics(raw, context["all1"])}
     out.parent.mkdir(parents=True, exist_ok=True)
     layouts.mkdir()
-    label = "shared" if seed is None else f"sampled_seed{seed}"
     np.savez_compressed(
-        layouts / f"information_{label}_K{int(K_budget)}.npz",
+        layouts / f"information_sampled_seed{seed}_K{int(K_budget)}.npz",
         x_best_junction=x, x_best_global=x_global,
         junction_node_ids=np.asarray(ids), global_node_ids=np.asarray(context["node_ids"]),
         design_leak_node_ids=y, valid_scenarios=context["common"]["valid_scenarios"],
@@ -88,19 +86,9 @@ def _save_placement(X, y, design, *, context, K_budget, bins, out_csv,
          "bins": int(bins), "trace": ranking["trace"],
          "selected_node_ids": ranking["selected_node_ids"]}, indent=2), encoding="utf-8")
     pd.DataFrame([result]).to_csv(out, index=False, encoding="utf-8-sig")
-    print(f"[{route}] {result['net']}, seed={seed}: K={int(x.sum())}, "
+    print(f"[information] {result['net']}, seed={seed}: K={int(x.sum())}, "
           f"SR={metrics['success_rate']:.4f}; saved {out}", flush=True)
     return result
-
-
-def run_shared_H_information_comparison(*, nodes_csv, inp_path, H_path, rs_asset_path,
-                               K_budget, out_csv, bins=16, context=None):
-    """Run once per fixed H design; no new hydraulic simulations."""
-    if context is None:
-        context = information_context(nodes_csv=nodes_csv, inp_path=inp_path, rs_asset_path=rs_asset_path)
-    X, y, design = load_nominal_H_design(H_path, context["ids"])
-    return _save_placement(X, y, design, context=context, K_budget=K_budget,
-                           bins=bins, out_csv=out_csv, route="information_h")
 
 
 def run_information_comparison(*, nodes_csv, inp_path, H_path, rs_asset_path,
@@ -136,7 +124,7 @@ def run_information_comparison(*, nodes_csv, inp_path, H_path, rs_asset_path,
         X, y, design = load_sampled_design(design_path, seed, context["ids"])
         records.append(_save_placement(
             X, y, design, context=context, K_budget=K_budget, bins=bins,
-            out_csv=seed_csv, route="information", seed=seed,
+            out_csv=seed_csv, seed=seed,
         ))
     pd.DataFrame(records).to_csv(out, index=False, encoding="utf-8-sig")
     return records

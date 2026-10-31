@@ -84,14 +84,6 @@ Pressures are quantized into 16 equal-width bins (4bit), fitted separately on ea
 
 The profile uses seeds **0, 11, 22, 33, 44, 55, 66, 77, 88, 99**. For IT, the seed controls sampled leak locations. Forward ranking is deterministic for a fixed design dataset. Outputs include raw SR/MRR/TE/ETE, all1-relative metrics, per-seed layouts and ranking traces, and the cached design pressures under the selected output directory. MVC and H-response use their recorded PIGNN settings and the same candidate sets, K and evaluation assets.
 
-An additional shared-H design comparison is available explicitly:
-
-```bash
-python run.py objective --nets Hanoi --objectives information_h
-```
-
-This route transposes the labeled H asset, using each available nominal leak column as one sample and its node ID as the class. It preserves all sensor rows when failed H leak columns were excluded. With one sample per class, empirical relevance equals discretized response entropy and does not estimate variation within a leak class. It needs no new design simulations when H is supplied and produces one fixed layout per network, with an empty seed and `repetition=fixed_design`. It is retained as an additional design comparison, rather than counted as ten independent repeats.
-
 Building a fresh H normally requires one no-leak baseline plus one leak simulation per candidate, with extra calls for failed-node recovery. H is prepared once and shared across optimizer seeds. MVC uses topology and needs no hydraulic design simulations. Calibration and R/S generation are common preparation/evaluation costs, separate from each method's design-data budget. No artificial calls are assigned to MVC to equalize costs.
 
 ## Citation
