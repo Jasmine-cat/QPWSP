@@ -75,8 +75,8 @@ def solve_qubo_de_topk(
         idx = topk_indices(score)
         if idx.size == 0:
             return float(qubo_const)
-        # 对 K-hot 解，x^T Q x 等价于被选节点子矩阵所有元素之和。
-        # 这样避免每次 DE 评价都做 N 维全矩阵乘法。
+
+
         return float(Q[np.ix_(idx, idx)].sum()) + float(qubo_const)
 
     pop = rng.random((pop_size, N), dtype=np.float64)

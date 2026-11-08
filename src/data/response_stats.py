@@ -42,12 +42,7 @@ def _leak_pair_redundancy_from_H(
     *,
     eps: float = 1e-12,
 ) -> np.ndarray:
-    """
-    基于列归一化后的 H 构造任务区分谱统计量。
-
-    Returns:
-      Red_g: cosine redundancy between node contribution profiles g_i.
-    """
+    """Compute cosine redundancy between leak-pair discrimination profiles."""
     Hn = _column_l2_normalize(H, eps=eps)
     N, P = Hn.shape
     iu, ju = np.triu_indices(P, k=1)
@@ -157,7 +152,7 @@ def _leak_leverage_importance_from_H(
     I_leverage = safe_minmax_1d(leverage)
 
     # Residual response energy highlights nodes that are informative in modes
-    # 残差项用于补充主导 PCA/leverage 子空间未覆盖的小模式。
+    # Residual energy captures response modes outside the dominant subspace.
     H_main = U_r @ (U_r.T @ Hn)
     H_res = Hn - H_main
     residual_energy = np.sum(H_res * H_res, axis=1)
@@ -192,7 +187,7 @@ def compute_leak_importance_and_redundancy_from_H(
 
 
 def safe_minmax_1d(x: np.ndarray, eps: float = 1e-12) -> np.ndarray:
-    '''minmax归一化'''
+    """Apply finite-safe min-max normalization to a vector."""
     x = np.asarray(x, dtype=float).reshape(-1)
     if x.size == 0:
         return x.copy()

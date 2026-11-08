@@ -35,9 +35,9 @@ except Exception as e:
 def _require_epynet():
     if Network is None or epanet2 is None:
         raise ImportError(
-            "epynet 未安装或导入失败，无法使用 EPYNET 后端。\n"
+            "epynet is missing or could not be imported; the EPYNET backend is unavailable.\n"
             f"Import error: {repr(_EPYNET_IMPORT_ERR)}\n"
-            "请先 pip install epynet"
+            "Install epynet with pip install epynet."
         )
 
 
@@ -55,14 +55,12 @@ def _safe_close_network(wn):
 
 
 def _iter_nodes(wn) -> list:
-    """
-    统一取 node 对象列表（兼容 wn.nodes 可能是 dict/iterable）。
-    """
+    """Return node objects from an epynet network."""
     if hasattr(wn, "nodes"):
         nodes_obj = wn.nodes
         if isinstance(nodes_obj, dict):
             return list(nodes_obj.values())
-        # 有的版本 wn.nodes 是可迭代容器
+
         try:
             return list(nodes_obj)
         except Exception:
@@ -71,9 +69,7 @@ def _iter_nodes(wn) -> list:
 
 
 def _iter_links(wn) -> list:
-    """
-    统一取 link 对象列表（兼容 wn.links 可能是 dict/iterable）。
-    """
+    """Return link objects from an epynet network."""
     if hasattr(wn, "links"):
         links_obj = wn.links
         if isinstance(links_obj, dict):
@@ -86,21 +82,17 @@ def _iter_links(wn) -> list:
 
 
 def _node_id(node) -> str:
-    """
-    统一节点 id（epynet 常用 uid）
-    """
+    """Return the node identifier across supported epynet versions."""
     if hasattr(node, "uid"):
         return str(node.uid)
     if hasattr(node, "id"):
         return str(node.id)
-    # 兜底
+
     return str(node)
 
 
 def _node_type_str(node) -> str:
-    """
-    统一节点类型字符串：Junction / Reservoir / Tank / Other
-    """
+    """Normalize a node type to Junction, Reservoir, Tank, or Other."""
     t = node.__class__.__name__.lower()
     if "junction" in t:
         return "Junction"
@@ -108,7 +100,7 @@ def _node_type_str(node) -> str:
         return "Reservoir"
     if "tank" in t:
         return "Tank"
-    # 有时是 Node 类型，尝试 node.type
+
     if hasattr(node, "type"):
         tt = str(getattr(node, "type")).lower()
         if "junction" in tt:
@@ -121,9 +113,7 @@ def _node_type_str(node) -> str:
 
 
 def _node_elevation_or_head(node) -> float:
-    """
-    elevation：Junction/Tank；Reservoir 用 head（若有）
-    """
+    """Return a node elevation or reservoir head."""
     if hasattr(node, "elevation"):
         try:
             return float(node.elevation)
@@ -138,9 +128,7 @@ def _node_elevation_or_head(node) -> float:
 
 
 def _node_base_demand(node) -> float:
-    """
-    base demand：epynet Junction 常见字段 basedemand（注意不是 base_demand）
-    """
+    """Return a junction base demand."""
     for attr in ["basedemand", "base_demand", "demand"]:
         if hasattr(node, attr):
             try:
@@ -152,9 +140,7 @@ def _node_base_demand(node) -> float:
 
 
 def _node_xy(node) -> tuple[float, float]:
-    """
-    坐标：优先 coordinates / x,y
-    """
+    """Return the node coordinates."""
     if hasattr(node, "coordinates") and node.coordinates is not None:
         try:
             x, y = node.coordinates
@@ -170,10 +156,8 @@ def _node_xy(node) -> tuple[float, float]:
 
 
 def _link_endpoints(link) -> tuple[str, str] | None:
-    """
-    统一从 link 对象中取端点节点 id（不同版本属性名略有差异）
-    """
-    # 常见：start_node/end_node 或 startnode/endnode
+    """Return the identifiers of the endpoints of a link."""
+
     for a, b in [("start_node", "end_node"), ("startnode", "endnode"),
                  ("from_node", "to_node"), ("fromnode", "tonode")]:
         if hasattr(link, a) and hasattr(link, b):
@@ -183,7 +167,7 @@ def _link_endpoints(link) -> tuple[str, str] | None:
                 continue
             return _node_id(u), _node_id(v)
 
-    # 有些版本 link 有 node1/node2
+
     for a, b in [("node1", "node2")]:
         if hasattr(link, a) and hasattr(link, b):
             u = getattr(link, a)
@@ -209,9 +193,7 @@ def _log1p_zscore_positive(values: np.ndarray) -> np.ndarray:
 
 
 def _set_time_params_epynet(wn, duration_s: int, step_s: int):
-    """
-    用 epanet2 toolkit 设置 EPS 参数（最稳）
-    """
+    """Set extended-period simulation time parameters via the EPANET toolkit."""
     if not hasattr(wn, "ep") or wn.ep is None:
         raise RuntimeError("epynet Network has no toolkit handle wn.ep")
 
@@ -220,22 +202,17 @@ def _set_time_params_epynet(wn, duration_s: int, step_s: int):
     wn.ep.ENsettimeparam(epanet2.EN_REPORTSTEP, int(step_s))
 
 def _extract_pressure_reporttimeseries_from_run(wn) -> pd.DataFrame:
-    """
-    从 epynet (wn.time + node.results['pressure']) 中提取只包含 REPORTSTEP 的压力时序。
-    返回 DataFrame:
-      index: report times (seconds, int)
-      columns: node id (str)
-    """
-    # 1) 取 reportstep/reportstart
+    """Extract pressures at report times from a completed epynet run."""
+
     rep_step = wn.ep.ENgettimeparam(epanet2.EN_REPORTSTEP)
     rep_start = wn.ep.ENgettimeparam(epanet2.EN_REPORTSTART)
 
-    # 2) 原始时间轴（通常是 hydstep 轴）
+
     times = np.asarray(list(map(int, wn.time)), dtype=int)
     if times.size == 0:
         raise RuntimeError("wn.time is empty. Did you call wn.run()?")
 
-    # 3) 选出“应报告”的时刻：t>=rep_start 且 (t-rep_start)%rep_step==0
+
     mask = (times >= rep_start) & (((times - rep_start) % rep_step) == 0)
     rep_times = times[mask]
     if rep_times.size == 0:
@@ -245,13 +222,13 @@ def _extract_pressure_reporttimeseries_from_run(wn) -> pd.DataFrame:
             f"time_span=[{times.min()},{times.max()}]"
         )
 
-    # 4) 组装每个节点的 pressure 并按 mask 下采样
-    nodes = _iter_nodes(wn)  # 你已有的工具函数
+
+    nodes = _iter_nodes(wn)
     cols = []
     data_cols = []
 
     for node in nodes:
-        nid = _node_id(node)  # 你已有的工具函数
+        nid = _node_id(node)
         if not hasattr(node, "results") or node.results is None:
             raise RuntimeError(f"node {nid} has no results.")
         if "pressure" not in node.results:
@@ -268,13 +245,7 @@ def _extract_pressure_reporttimeseries_from_run(wn) -> pd.DataFrame:
     dfP = pd.DataFrame(M, index=pd.Index(rep_times, name="time"), columns=cols)
     return dfP
 def _extract_pressure_timeseries_from_run2(wn) -> pd.DataFrame:
-    """
-    epynet 的 Network.run() 不返回 results，而是：
-      - wn.time: [t0, t1, ...] 秒
-      - 每个 node.results['pressure']: list, length==len(wn.time)
-
-    这里组装成 DataFrame: index=time(s), columns=node_id(str)
-    """
+    """Extract the node pressure time series from a completed epynet run."""
     if not hasattr(wn, "time") or wn.time is None or len(wn.time) == 0:
         raise RuntimeError("epynet network has no time axis. Did you call wn.run()?")
 
@@ -289,8 +260,8 @@ def _extract_pressure_timeseries_from_run2(wn) -> pd.DataFrame:
             raise RuntimeError(f"node {nid} has no results. Did wn.run() collect attributes?")
 
         if "pressure" not in node.results:
-            # 有的版本只存 head；pressure 对 reservoir/tank 也可能不同
-            # 这里严格要求 pressure，缺了就报错，方便你定位版本差异
+
+
             raise RuntimeError(
                 f"node {nid} has no results['pressure'] keys={list(node.results.keys())}"
             )
@@ -317,51 +288,36 @@ def run_inp_to_features(
     *,
     duration_s: int = 24 * 3600,
     report_step_s: int = 3600,
-    convert_to_SI: bool = True,   # ★新增：是否统一到 SI 输出
+    convert_to_SI: bool = True,
 ):
-    """
-    从 inp 文件生成节点特征与基线压力时序（EPYNET 后端版）
-    并可选把输出统一到 SI：
-      - base_demand -> L/s
-      - elevation/head -> m
-      - pressure -> mH2O (meters of water head)
-
-    Returns
-    -------
-    dict:
-        {
-            "node_features": pd.DataFrame,
-            "pressure_timeseries": pd.DataFrame,
-            "graph_meta": dict
-        }
-    """
+    """Generate graph features and baseline pressures from an EPANET input network."""
     _require_epynet()
 
     inp_path = _P.Path(inp_path)
     if not inp_path.exists():
-        raise FileNotFoundError(f"未找到输入文件：{inp_path}")
+        raise FileNotFoundError(f"Input file not found: {inp_path}")
 
     out = _P.Path(out_dir) if out_dir else inp_path.parent / "node_features"
     out.mkdir(parents=True, exist_ok=True)
-    print(f"开始解析管网图————[INFO] 输出目录: {out.resolve()}")
+    print(f"[INFO] Processing network; output directory: {out.resolve()}")
 
     # --------------------------
-    # (0) 解析 Units / Pressure
+
     # --------------------------
-    # 只依赖 INP 文本，不依赖 epynet 解析成功后的属性
+
     units, pressure_unit = parse_inp_options_units_pressure(str(inp_path))
 
     k_flow = float(unit_to_LPS_factor(units))   # 1 (inp flow unit) = ? L/s
 
 
-    # elevation/head 的长度单位：US(ft) vs SI(m)
+
     k_len = float(length_unit_to_m_factor(units))
 
     # pressure -> meters of water head
     k_p = float(pressure_to_m_factor(pressure_unit, units))
 
     # --------------------------
-    # (1) 载入网络
+
     # --------------------------
     wn = Network(str(inp_path))
     try:
@@ -373,11 +329,11 @@ def run_inp_to_features(
     links_obj = _iter_links(wn)
 
     node_ids = [_node_id(n) for n in nodes_obj]
-    print(f"[INFO] 成功加载网络，共 {len(node_ids)} 个节点, {len(links_obj)} 条 link")
+    print(f"[INFO] Loaded network with {len(node_ids)} nodes and {len(links_obj)} links")
     print(f"[INFO] INP Units={units}, PressureUnit={pressure_unit}, convert_to_SI={convert_to_SI}")
 
     # --------------------------
-    # (2) 构建节点特征（raw）
+
     # --------------------------
     types = []
     elev = []
@@ -405,7 +361,7 @@ def run_inp_to_features(
         edges.append((u, v))
 
     # --------------------------
-    # (4) 图论特征
+
     # --------------------------
     G_u = nx.Graph()
     G_u.add_nodes_from(node_ids)
@@ -427,7 +383,7 @@ def run_inp_to_features(
         "close_c": [clo.get(n, 0.0) for n in node_ids],
     }).set_index("node")
 
-    # 到水源最短 hop
+
     sources = [nid for nid, tp in zip(node_ids, types) if str(tp).lower() in ("reservoir", "tank")]
     if sources:
         sp = {}
@@ -445,7 +401,7 @@ def run_inp_to_features(
         node_feats["hop_to_source_min"] = np.nan
 
     # --------------------------
-    # (5) 压力仿真（基线 EPS）
+
     # --------------------------
     try:
         _set_time_params_epynet(wn, duration_s=int(duration_s), step_s=int(report_step_s))
@@ -455,12 +411,12 @@ def run_inp_to_features(
         _safe_close_network(wn)
 
     # --------------------------
-    # (6) ★可选：统一到 SI 单位体系
+
     # --------------------------
     conv_info = {
         "orig_units": units,
         "orig_pressure_unit": pressure_unit,
-        "target_units": "原始raw_inp_units",
+        "target_units": "\u539f\u59cbraw_inp_units",
         "flow_to_LPS_factor": float(k_flow),
         "len_to_m_factor": float(k_len),
         "pressure_to_m_factor": float(k_p),
@@ -477,9 +433,9 @@ def run_inp_to_features(
         pressure = pressure.astype(float) * k_p
 
         conv_info["target_units"] = "SI(base_demand=L/s, elevation=m, pressure=mH2O)"
-    node_feats = add_euclid_dist_to_source_features(node_feats, use_log1p=False)#附加额外"到水源欧氏距离“属性
+    node_feats = add_euclid_dist_to_source_features(node_feats, use_log1p=False)
     # --------------------------
-    # (7) 保存
+
     # --------------------------
     # --------------------------
     # edge static features (E_edge)
@@ -628,14 +584,14 @@ def run_inp_to_features(
     }
     pd.Series(meta).to_json(out / graph_meta_path, force_ascii=False, indent=2)
 
-    print(f"[INFO] 解析完毕输出文件: {name}_node_features.csv, {name}_pressure_timeseries.parquet, {name}_graph_meta.json")
+    print(f"[INFO] Generated files: {name}_node_features.csv, {name}_pressure_timeseries.parquet, {name}_graph_meta.json")
 
     print(f"[INFO] edge static features file: {name}_edge_features.csv")
 
     return {
         "node_features": node_feats,
         "edge_features": edge_feats,
-        "pressure_timeseries": pressure,#记录结果时统一单位mH2O
+        "pressure_timeseries": pressure,
         "graph_meta": meta
     }
 
@@ -645,19 +601,15 @@ def compute_LDD(node_feats: pd.DataFrame) -> float:
     base_demands = junc_nodes["base_demand"].values
     base_demands = base_demands[base_demands > 0]
     if len(base_demands) == 0:
-        raise ValueError("所有 Junction base_demand 均为 0，无法定义 LDD。")
+        raise ValueError("All junction base demands are zero; LDD is undefined.")
     return float(base_demands.mean())
 def relative_pressure_drop(
-    P_base_t: pd.Series,   # 某时刻的基线压力（sensor nodes）
-    P_leak_t: pd.Series,   # 某时刻的泄漏压力（同索引）
+    P_base_t: pd.Series,
+    P_leak_t: pd.Series,
     eps_p: float = 1e-10,
     min_base_p: float = 1e-6,
 ) -> pd.Series:
-    """
-    相对压降：|ΔP| / (|P_base| + eps)，无量纲。
-    为避免某些节点 P_base ~ 0 导致爆炸，denom 额外做 min clamp。
-    用来计算beta，平衡不同单位下base-demand的影响
-    """
+    """Compute dimensionless relative pressure drop with a clamped denominator."""
     P0 = P_base_t.astype(float).abs()
     denom = np.maximum(P0.to_numpy(), float(min_base_p)) + float(eps_p)
     rel = (P_base_t.astype(float) - P_leak_t.astype(float)).abs().to_numpy() / denom
@@ -672,9 +624,7 @@ def β_pick_pilot_leak_nodes(node_feats: pd.DataFrame, n_pilot_nodes=3, seed=0):
 
 
 def _deepcopy_or_reload_epynet(wn_base):
-    """
-    leak 仿真用：尽量 deepcopy；失败则用 inp_path 重载。
-    """
+    """Copy the simulation network, or reload the INP file if copying fails."""
     try:
         wn = copy.deepcopy(wn_base)
         return wn
@@ -718,10 +668,7 @@ def β_simulate_leak(wn_base, leak_node, q_leak_inp, P_base_inp, meta):
 
 
 def β_evaluate_beta(wn_base, beta, LDD_inp, pilot_nodes, P_base_inp, node_feats, meta, tmp_threshold_rel=0.01,):
-    """
-    对每个 β & pilots 节点，统计 ΔP 规模 & 检测稀疏度
-    记录不同β的pilots节点压降表现
-    """
+    """Evaluate candidate leakage magnitudes at pilot nodes."""
     stats = []
 
     P_junc = P_base_inp[node_feats[node_feats["type"] == "Junction"].index.astype(str)]
@@ -732,7 +679,7 @@ def β_evaluate_beta(wn_base, beta, LDD_inp, pilot_nodes, P_base_inp, node_feats
         prefer_high_std=True,
         verbose=False,
     )
-    sensor_nodes=list(P_junc.columns)#相当于取出junctions的id
+    sensor_nodes=list(P_junc.columns)
     k_flow = float(meta.get("unit_conversion", None).get("flow_to_LPS_factor", 1.0))
     for leak_node in pilot_nodes:
         q_leak_inp = float(beta) * float(LDD_inp)
@@ -743,7 +690,7 @@ def β_evaluate_beta(wn_base, beta, LDD_inp, pilot_nodes, P_base_inp, node_feats
         try:
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
-                dP = β_simulate_leak(wn_base, leak_node, q_leak_inp, P_base_inp, meta)  # 默认单位mH2O
+                dP = β_simulate_leak(wn_base, leak_node, q_leak_inp, P_base_inp, meta)
             warn_msgs = [str(w.message) for w in caught]
         except Exception as e:
             dP = None
@@ -765,9 +712,9 @@ def β_evaluate_beta(wn_base, beta, LDD_inp, pilot_nodes, P_base_inp, node_feats
             continue
 
         #quick_diagnose_one_pilot_case(P_base, dP, node_feats, min_ptime, threshold_rel=0.01)
-        # 取该时刻的基线/泄漏压力（只在 sensor_nodes 上算相对压降）
+
         P0 = P_base_inp.loc[min_ptime, sensor_nodes]
-        Pleak = (P_base_inp.loc[min_ptime, sensor_nodes] - dP.loc[min_ptime, sensor_nodes])  # 因为 dP = P_base - P_leak
+        Pleak = (P_base_inp.loc[min_ptime, sensor_nodes] - dP.loc[min_ptime, sensor_nodes])
         rel = relative_pressure_drop(P0, Pleak)
         rel_arr = np.asarray(rel, dtype=float)
         rel_arr = rel_arr[np.isfinite(rel_arr)]
@@ -813,9 +760,7 @@ def β_auto_pick_beta(
     max_invalid_rate=0.4,
     max_hyd_warn_rate=0.6,
 ):
-    """
-    自动选择“合适”的 β 泄漏强度比
-    """
+    """Select a reference leakage magnitude using pilot simulations."""
     pilot_nodes = β_pick_pilot_leak_nodes(node_feats, n_pilot_nodes=n_pilot_nodes)
 
     records = []
@@ -927,14 +872,12 @@ def β_auto_pick_beta(
 
 
 def get_base_features_fromInp(inp_path: str, out_dir: str | None = None):
-    """
-    入口：生成 step1 产物 + 自动挑 beta + 输出 q0
-    """
+    """Generate graph features and reference leakage calibration for an input network."""
     if out_dir is None:
         out_dir = str((_P.Path(inp_path).resolve().parent / "node_features"))
     step1_result = run_inp_to_features(inp_path, out_dir)
 
-    # 基线网络对象（epynet Network）
+
     wn_base = Network(str(inp_path))
     try:
         wn_base._inp_path = str(inp_path)
@@ -942,12 +885,12 @@ def get_base_features_fromInp(inp_path: str, out_dir: str | None = None):
         pass
 
     node_feats = step1_result["node_features"]
-    P_base = step1_result["pressure_timeseries"]#记录结果时统一单位mH2O
+    P_base = step1_result["pressure_timeseries"]
     meta = step1_result["graph_meta"]
     units = meta.get("units", "UNKNOWN")
     k_flow = float(meta.get("unit_conversion",None).get("flow_to_LPS_factor", 1.0))
     k_p = float(meta.get("unit_conversion",None).get("pressure_to_m_factor", 1.0))
-    LDD_LPS = compute_LDD(node_feats)#在记入node_feature时已经转换LPS统一单位
+    LDD_LPS = compute_LDD(node_feats)
     LDD_inp = LDD_LPS / max(k_flow, 1e-12)
     P_base_inp = P_base / max(k_p, 1e-12)
     selected_ptime_s = meta.get("selected_ptime_s", None)
@@ -981,7 +924,7 @@ def get_base_features_fromInp(inp_path: str, out_dir: str | None = None):
             det_high=det_high,
             max_invalid_rate=max_invalid_rate,
             max_hyd_warn_rate=max_hyd_warn_rate,
-        )#小样本仿真使用INP单位，避免函数内反复换算
+        )
     finally:
         _safe_close_network(wn_base)
 
@@ -1018,7 +961,7 @@ def get_base_features_fromInp(inp_path: str, out_dir: str | None = None):
     return {
         "node_features": node_feats,
         "P_base_inp": P_base_inp,
-        "P_base": P_base,#单位m
+        "P_base": P_base,
         "graph_meta": meta,
         "q0_LPS": q0_LPS,
         "q0_inp": q0_inp,

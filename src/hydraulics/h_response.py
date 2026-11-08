@@ -33,8 +33,8 @@ def _resolve_q0_json_path(inp_name: str, q0_json_path: Optional[str], node_featu
 def _load_q0_info(q0_json_path: str) -> dict:
     if not os.path.exists(q0_json_path):
         raise FileNotFoundError(
-            f"未找到 q0 json: {q0_json_path}。"
-            "请先运行 inp_graph_parser，或显式传入 q0_json_path。"
+            f"q0 JSON file not found: {q0_json_path}。"
+            "Run network preparation or specify q0_json_path explicitly."
         )
     with open(q0_json_path, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -53,7 +53,7 @@ def _resolve_q_ref_lps(q0_info: dict) -> tuple[float, str]:
 
     if "LDD_lps" not in q0_info:
         raise KeyError(
-            "fallback q_ref 需要 q0.json 中存在 LDD_lps，但当前缺失。"
+            "The fallback q_ref requires LDD_lps in q0.json."
             f"Current keys={list(q0_info.keys())}"
         )
     return float(q0_info["LDD_lps"]), "LDD_lps_fallback"
@@ -96,7 +96,7 @@ def generate_H_from_inp(
     inp_path = os.path.abspath(inp_path)
     inp_name = Path(inp_path).stem
 
-    print(f"[H] 读取网络: {inp_path}")
+    print(f"[H] Loading network: {inp_path}")
     wn = wntr.network.WaterNetworkModel(inp_path)
     all_junction_names = list(wn.junction_name_list)
     all_junction_nodes = [wn.get_node(name) for name in all_junction_names]
@@ -110,13 +110,13 @@ def generate_H_from_inp(
     ]
     if skipped_negative:
         print(
-            f"[H] 从 H 行/列候选集合剔除 {len(skipped_negative)} 个负需求 junction: "
+            f"[H] Excluded {len(skipped_negative)} junctions with negative demand from the candidate set: "
             f"{skipped_negative[:8]}"
             f"{'...' if len(skipped_negative) > 8 else ''}"
         )
     junction_names = [name for name, keep in zip(all_junction_names, keep_junction) if bool(keep)]
     if len(junction_names) == 0:
-        raise ValueError(f"[H][{inp_name}] 没有可用的非负需求 junction 候选节点。")
+        raise ValueError(f"[H][{inp_name}] No eligible junctions with nonnegative demand remain.")
 
     junction_nodes = [wn.get_node(name) for name in junction_names]
     base_demands_m3s = np.array(
@@ -127,13 +127,13 @@ def generate_H_from_inp(
     q0_json_path = _resolve_q0_json_path(inp_name, q0_json_path, node_features_dir)
     q0_info = _load_q0_info(q0_json_path)
     q_ref_base_lps, q_ref_base_source = _resolve_q_ref_lps(q0_info)
-    # H 使用小扰动强度，与 RS 评价强度区间错位，避免响应先验和评价强度完全同源。
+    # Use a small reference perturbation for the H design asset.
     q_ref_lps = float(q_ref_base_lps) * float(h_ref_factor)
     q_ref_source = f"{q_ref_base_source}*h_ref_factor"
     if q_ref_lps <= 0:
-        raise ValueError(f"[H][{inp_name}] q_ref_lps 必须大于 0，当前为 {q_ref_lps}")
+        raise ValueError(f"[H][{inp_name}] q_ref_lps must be positive; got {q_ref_lps}")
     q_ref_m3s = float(q_ref_lps) / 1000.0
-    # q_ref 只在作为 H 分母时加 eps 保险，避免极小分母造成数值放大。
+    # Regularize the reference-flow denominator against numerical instability.
     q_ref_denominator_eps_lps = 1e-9
     q_ref_denominator_lps = float(q_ref_lps) + q_ref_denominator_eps_lps
 
@@ -151,7 +151,7 @@ def generate_H_from_inp(
     selected_ptime_s = q0_info.get("selected_ptime_s", graph_meta.get("selected_ptime_s", None))
     if selected_ptime_s is None:
         raise KeyError(
-            f"[H][{inp_name}] q0 json 与 graph meta 中都缺少 selected_ptime_s。"
+            f"[H][{inp_name}] selected_ptime_s is missing from q0 JSON and graph metadata."
         )
     selected_ptime_s = int(selected_ptime_s)
 
@@ -272,7 +272,7 @@ def generate_H_from_inp(
     os.makedirs(os.path.dirname(out_csv), exist_ok=True)
     pd.DataFrame(H, index=junction_names, columns=leak_names).to_csv(out_csv, encoding="utf-8")
 
-    print(f"[H] 保存完成: {out_npz}, {out_csv}")
+    print(f"[H] Saved: {out_npz}, {out_csv}")
     return {
         "inp_name": inp_name,
         "junction_count": int(len(junction_names)),

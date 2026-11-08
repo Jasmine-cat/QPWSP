@@ -1,4 +1,4 @@
-"""PIGNN训练与分阶段Top-k STE。"""
+"""Graph optimizer training and staged top-K straight-through selection."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def qubo_loss_subset(
     Q: torch.Tensor,
     junction_idx: torch.Tensor,
 ) -> torch.Tensor:
-    """计算 junction 子集上的 relaxed 或 hard QUBO 完整能量。"""
+    """Compute QUBO energy for the junction subset."""
     p = p_all[junction_idx]
     return torch.dot(p, Q @ p) + qubo_const
 
@@ -32,7 +32,7 @@ def _ema(values: List[float], window: int) -> float:
 
 
 def _hard_topk(prob: torch.Tensor, k: int) -> torch.Tensor:
-    """生成无梯度的 exact-K 二值向量。"""
+    """Project scores to an exact-K binary vector without gradients."""
     n, kk = int(prob.numel()), int(k)
     if kk <= 0:
         return torch.zeros_like(prob)
@@ -44,7 +44,7 @@ def _hard_topk(prob: torch.Tensor, k: int) -> torch.Tensor:
 
 
 def _ste_topk(prob: torch.Tensor, k: int) -> torch.Tensor:
-    """前向 exact-K、反向恒等近似的 Top-k STE。"""
+    """Use an exact-K forward pass and an identity straight-through gradient."""
     hard = _hard_topk(prob, k)
     return hard + (prob - prob.detach())
 
@@ -77,7 +77,7 @@ class TrainConfig:
 
 
 def set_global_seed(seed: int, deterministic_torch: bool = True) -> None:
-    """固定 Python、NumPy 与 PyTorch 的随机状态。"""
+    """Set the Python, NumPy, and PyTorch random seeds."""
     seed = int(seed)
     random.seed(seed)
     np.random.seed(seed)
@@ -96,7 +96,7 @@ def set_global_seed(seed: int, deterministic_torch: bool = True) -> None:
 def _prepare_physics_tensors(
     graph_aux_np: Optional[Dict[str, Any]], n_all: int, device: torch.device
 ) -> Tuple[bool, str, Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]:
-    """校验并转化边物理编码、端点索引和关联矩阵。"""
+    """Validate and convert edge attributes, endpoints, and incidence tensors."""
     if not isinstance(graph_aux_np, dict):
         return False, "graph_aux_np is missing", None, None, None
     missing = [key for key in ("edge_attr", "edge_index", "B_incidence") if key not in graph_aux_np]
@@ -159,8 +159,10 @@ def train_single_run(
     min_lr: Optional[float] = None,
     grad_clip_norm: Optional[float] = None,
 ) -> Tuple[np.ndarray, float, List[float]]:
-    """执行一次 PIGNN/GCN 训练，stage2 固定采用 exact-K Top-k STE。"""
+    """Train one graph optimizer using two-stage exact-K selection."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # To force CPU execution, uncomment the next line; otherwise CUDA is used when available.
+    # device = torch.device("cpu")
     n_all, feature_dim = X_np.shape
     Q_np, const_total = extract_qubo_total(Q_dist_np, const_dist)
     X = torch.tensor(X_np, dtype=torch.float32, device=device)
@@ -344,7 +346,7 @@ def train_multi_start(
     deterministic_torch: bool = False,
     num_restarts: int = 1,
 ) -> Tuple[np.ndarray, float, List[List[float]]]:
-    """多重启训练，并按 stage2 true Ebin 或 soft loss 选择最佳重启。"""
+    """Train multiple restarts and select the best result."""
     best_p: Optional[np.ndarray] = None
     best_loss = float("inf")
     histories: List[List[float]] = []
@@ -365,7 +367,7 @@ def train_multi_start(
 
 
 def project_to_binary(p: np.ndarray, K_budget: int) -> np.ndarray:
-    """按 soft 分数排序得到最终 exact-K 二值部署。"""
+    """Project scores to an exact-K binary deployment."""
     p = np.asarray(p, dtype=float).reshape(-1)
     K = int(K_budget)
     if K < 0 or K > p.size:

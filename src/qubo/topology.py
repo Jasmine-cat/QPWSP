@@ -1,4 +1,4 @@
-"""MVC-type 目标所需的 junction 边集转换工具。"""
+"""Graph edge transformations for the MVC objective."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import numpy as np
 def undirected_unique_edges(
     edges_idx: Iterable[Sequence[int]], *, remove_self: bool = True
 ) -> List[Tuple[int, int]]:
-    """将全图边转换为无向去重边集。"""
+    """Convert graph edges to a deduplicated undirected set."""
     edges = set()
     for edge in edges_idx:
         if len(edge) != 2:
@@ -29,7 +29,7 @@ def build_junction_edge_list_from_full_edges(
     N_full: int,
     keep_unselectable_unselectable_edges: bool = False,
 ) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]], Dict[int, int]]:
-    """提取 junction 诱导子图边，供 MVC-type 覆盖项使用。"""
+    """Extract junction-only graph edges for the MVC objective."""
     junction = np.asarray(junction_idx_full, dtype=int).reshape(-1)
     if np.any(junction < 0) or np.any(junction >= int(N_full)):
         raise ValueError("junction_idx_full contains an out-of-range index")

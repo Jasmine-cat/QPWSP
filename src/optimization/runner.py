@@ -1,8 +1,4 @@
-"""论文正式实验的统一入口。
-
-支持 H-response 与 MVC-type 目标、PIGNN 和四类离散优化器，并统一输出
-all1 归一化定位指标。预算敏感性、消融和鲁棒性实验均复用本模块。
-"""
+"""Run placement optimizers and evaluate localization."""
 
 from __future__ import annotations
 
@@ -117,7 +113,7 @@ def run_single_budget_experiment(
     valid_scenarios: Optional[np.ndarray] = None,
     rs_asset_path: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """运行单个 ``network × K × seed × method`` 试验。"""
+    """Run one network, sensor budget, seed, and optimizer combination."""
     inp_name = Path(inp_path).stem
     cfg = {} if method == "random" else _get_method_cfg(cfg_list, method)
     (
@@ -365,7 +361,7 @@ def run_multiple_budgets(
     out_csv: Optional[str] = None,
     cfg_list: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
-    """批量运行正式方法对比、目标消融或预算敏感性实验。"""
+    """Run optimizer, objective, ablation, or budget comparisons."""
     if out_csv and Path(out_csv).exists():
         raise FileExistsError(f"Refusing to overwrite experiment output: {out_csv}")
     methods = list(methods or ["A0_gnn", "A1_qubo", "A2_ga", "A4_greedy_swap", "A5_de"])

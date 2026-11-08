@@ -1,4 +1,4 @@
-"""运行论文 V1--V9 组件消融实验。"""
+"""Run component ablation experiments."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ OUT_DIR = ROOT / "outputs" / "experiments" / "ablation"
 SEEDS = [0, 11, 22, 33, 44, 55, 66, 77, 88, 99]
 NETWORKS = ("CY_DMA", "Richmond_skeleton", "Hanoi", "EX")
 
-# 来自主线细化实验的 H-response 锚点参数。
+
 RESPONSE_ANCHORS = config.ablation_response
 MVC_ANCHORS = config.ablation_mvc
 

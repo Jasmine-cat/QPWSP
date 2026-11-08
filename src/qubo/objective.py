@@ -1,4 +1,4 @@
-"""论文正式实验使用的 QUBO 构造与能量统计工具。"""
+"""Construct QUBO components and report energy statistics."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ def _const_from_dist(
 def extract_qubo_total(
     Q_dist_np: Dict[str, np.ndarray], const_dist: Optional[Dict[str, Any]]
 ) -> Tuple[np.ndarray, float]:
-    """提取统一优化目标 ``x^T Q_total x + c_total``。"""
+    """Return the total QUBO matrix and constant."""
     if not isinstance(Q_dist_np, dict) or "Q_total" not in Q_dist_np:
         raise ValueError("Q_dist_np must contain 'Q_total'.")
     return (
@@ -60,7 +60,7 @@ def compute_qubo_component_stats(
     Q_dist_np: Dict[str, np.ndarray],
     const_dist: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, float]:
-    """计算 soft 或 binary 向量的完整分量能量及绝对值占比。"""
+    """Compute soft or binary energies for each QUBO component."""
     Q_total, c_total = extract_qubo_total(Q_dist_np, const_dist)
     v = np.asarray(x_or_p, dtype=float).reshape(-1)
     if v.size != Q_total.shape[0]:
@@ -93,7 +93,7 @@ def compute_qubo_component_stats(
 
 
 def print_qubo_component_stats(label: str, stats: Dict[str, float]) -> None:
-    """输出各启用目标分量的完整能量分布。"""
+    """Print energy contributions from active QUBO components."""
     values = {name: float(stats[f"energy_{name}_full"]) for name, _, _ in QUBO_COMPONENT_SPECS}
     total = sum(abs(v) for v in values.values())
     text = "  ".join(
@@ -108,7 +108,7 @@ def build_Q_cov_from_edges(
     N: int,
     gamma: float = 1.0,
 ) -> Tuple[np.ndarray, float]:
-    """构造 MVC-type 覆盖目标 ``sum_(i,j)(1-x_i)(1-x_j)``。"""
+    """Build the MVC-type edge coverage objective."""
     N = int(N)
     if N <= 0:
         raise ValueError("N must be positive")
@@ -142,12 +142,12 @@ def build_Q_budget(
     K_budget: int,
     beta: float = 1.0,
 ) -> Tuple[np.ndarray, float]:
-    """构造 exact-K 的平方预算项 ``beta_eff (sum(x)-K)^2``。"""
+    """Build the K-squared-normalized exact-K budget penalty."""
     N, K = int(N), int(K_budget)
     if N <= 0 or K <= 0 or K > N:
         raise ValueError(f"invalid N={N}, K_budget={K}")
 
-    # 正式实验固定使用 K^2 归一，以保持不同预算下的预算项量级可比。
+    # Normalize the budget penalty by K squared.
     beta_eff = float(beta) / float(K * K)
 
     Q = np.full((N, N), beta_eff, dtype=float)
@@ -162,11 +162,7 @@ def build_Q_leak_from_H(
     alpha: float = 1.0,
     lambda_pair: float = 1.0,
 ) -> Tuple[np.ndarray, float]:
-    """构造最终 H-response QUBO 项。
-
-    对角线惩罚低任务重要度且高冗余密度的候选节点；非对角线惩罚
-    任务贡献谱相似的传感器组合。重要度采用固定的 leverage/residual 组合。
-    """
+    """Build the response importance and redundancy QUBO component."""
     H = np.asarray(H, dtype=float)
     if H.ndim != 2 or H.shape[0] == 0 or H.shape[1] == 0:
         raise ValueError(f"H must be a non-empty 2D matrix, got {H.shape}")
@@ -195,7 +191,7 @@ def build_Q_leak_from_H(
 
 
 def _normalize_H_for_qubo(H: np.ndarray, eps: float = 1e-12) -> np.ndarray:
-    """消除响应幅值与参考泄漏强度对 QUBO 尺度的支配。"""
+    """Normalize response columns and rows before QUBO construction."""
     H = np.asarray(H, dtype=float)
     col_norm = np.linalg.norm(H, axis=0, keepdims=True)
     H_col = np.divide(H, col_norm + eps, out=np.zeros_like(H), where=col_norm > eps)
@@ -220,7 +216,7 @@ def build_Q_total(
     demand_clip_quantile: float = 0.95,
     lambda_pair: float = 2.25,
 ) -> Tuple[Dict[str, np.ndarray], Dict[str, float]]:
-    """组装预算、H-response、MVC及默认关闭的需求偏置项。"""
+    """Combine budget, response, coverage, and optional demand components."""
     N, K = int(N), int(K_budget)
     if N <= 0 or K <= 0:
         raise ValueError(f"invalid N={N}, K_budget={K}")

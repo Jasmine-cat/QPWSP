@@ -9,7 +9,7 @@ NUMERIC_NODE_FEATURES = [
     "elevation",
     "base_demand",
     "dist_to_source_euclid_norm",
-    "dist_to_source_euclid_log_norm",#到水源的欧氏距离（归一化二选一），替代x/y坐标信息
+    "dist_to_source_euclid_log_norm",
     "deg_c",
     "betw_c",
     "close_c",
@@ -157,40 +157,23 @@ def build_junction_hop_dist_from_edges(
     include_reservoir_in_paths: bool = True,
     unreachable_penalty: Optional[int] = None,
 ) -> np.ndarray:
-    """
-    计算 Junction 子集之间的 hop 最短路距离矩阵 dist_junc (N_j, N_j)。
-    参数
-    ----
-    N_all : 全图节点数（Junction + Reservoir）
-    edges_idx : 全图边 (u,v) 的索引列表（基于全图索引）
-    junction_idx : Junction 在全图中的索引数组（长度 N_j）
-    include_reservoir_in_paths :
-        True  -> BFS 在全图上跑（允许路径经过 Reservoir）
-        False -> 只在 Junction 诱导子图上跑（Reservoir 不参与路径）
-    unreachable_penalty :
-        不可达时填充值；默认 N_j（一个较大但有限的惩罚）
-
-    返回
-    ----
-    dist_junc : (N_j, N_j) int
-        dist_junc[a,b] = dist( junction_idx[a], junction_idx[b] )
-    """
+    """Compute shortest-path distances between junctions in the network graph."""
     junction_idx = np.asarray(junction_idx, dtype=int).reshape(-1)
     N_j = len(junction_idx)
     if unreachable_penalty is None:
         unreachable_penalty = N_j
 
-    # 全图邻接表
+
     full_adj = [[] for _ in range(N_all)]
     for u, v in edges_idx:
         u = int(u); v = int(v)
         full_adj[u].append(v)
         full_adj[v].append(u)
 
-    # Junction 映射：global -> local
+
     g2j = {int(g): j for j, g in enumerate(junction_idx)}
 
-    # 若只允许 junction 子图路径，构造 junction-only 邻接表（节点仍用 global 编号更省事）
+
     if not include_reservoir_in_paths:
         jset = set(int(g) for g in junction_idx)
         adj = [[] for _ in range(N_all)]
@@ -199,7 +182,7 @@ def build_junction_hop_dist_from_edges(
     else:
         adj = full_adj
 
-    # BFS 从每个 Junction 出发（在 adj 上跑），取到其它 Junction 的距离
+
     dist_junc = np.full((N_j, N_j), fill_value=unreachable_penalty, dtype=int)
 
     for a, g_src in enumerate(junction_idx):
@@ -215,7 +198,7 @@ def build_junction_hop_dist_from_edges(
                     dist[nb] = dist[cur] + 1
                     q.append(nb)
 
-        # 只摘出到 junction 的距离
+
         for b, g_dst in enumerate(junction_idx):
             d = dist[int(g_dst)]
             dist_junc[a, b] = d if d >= 0 else unreachable_penalty
@@ -223,12 +206,7 @@ def build_junction_hop_dist_from_edges(
     return dist_junc
 
 def parse_inp_options_units_pressure(inp_path: str) -> tuple[str, str | None]:
-    """
-    解析得到inp文件中需求/流量的单位
-    返回 (UNITS, PRESSURE)：
-      - units: e.g. LPS/GPM/CMH/CMS...
-      - pressure: e.g. METERS/PSI/KPA... 或 None（没写）
-    """
+    """Read flow and pressure units from the INP options."""
     sec = None
     units = None
     pressure = None
@@ -252,33 +230,23 @@ def parse_inp_options_units_pressure(inp_path: str) -> tuple[str, str | None]:
                     units = val
                 elif key == "PRESSURE":
                     pressure = val
-    # 找不到就返回 None/默认
+
     return (units or "UNKNOWN"), pressure
 def length_unit_to_m_factor(units: str) -> float:
-    """
-    转换elevation单位
-    elevation/head 的长度单位：
-      - US units (e.g. GPM) -> ft
-      - SI units (LPS/CMH/CMS) -> m
-    返回 1 (inp length unit) = ? meters
-    """
+    """Return the conversion factor from INP length units to meters."""
     u = str(units).upper()
-    # EPANET: US = CFS, GPM, MGD, IMGD, AFD etc；你现在遇到主要是 GPM
+
     if u in ("GPM", "CFS", "MGD", "IMGD", "AFD"):
         return 0.3048  # ft -> m
-    # SI：LPS/CMH/CMS 等通常为 m
+
     if u in ("LPS", "L/S", "CMH", "CMS", "M3/H", "M^3/H", "M3/S", "M^3/S"):
         return 1.0
-    # UNKNOWN 时保守：不转换
+
     return 1.0
 
 
 def pressure_to_m_factor(pressure_unit: str | None, units: str) -> float:
-    """
-    把 pressure 数值转为 meters of water head 的系数：
-      P_m = P_inp * factor
-    如果 [OPTIONS] PRESSURE 给了单位则优先；否则根据 UNITS 推断（US->psi, SI->m）。
-    """
+    """Return the conversion factor from pressure units to meters of water head."""
     if pressure_unit is not None:
         pu = pressure_unit.upper()
         if pu in ("METERS", "M", "METER"):
@@ -291,20 +259,18 @@ def pressure_to_m_factor(pressure_unit: str | None, units: str) -> float:
         if pu in ("KPA",):
             # 1 kPa = 0.1019716 mH2O
             return 0.1019716
-        # 其他单位你可再扩展
+
         return 1.0
 
-    # 未显式给 PRESSURE：按 UNITS 体系推断
+
     u = str(units).upper()
     if u in ("GPM", "CFS", "MGD", "IMGD", "AFD"):
-        # US 系统默认 pressure 常见是 psi（很多工具）
+
         return 0.7030696
-    # SI 默认 meters
+
     return 1.0
 def unit_to_LPS_factor(units: str) -> float:
-    """
-    返回: 1 (unit) 等于多少 L/s
-    """
+    """Return the conversion factor from the given flow unit to liters per second."""
     u = str(units).upper()
     if u in ("LPS", "L/S", "LITERS/SEC", "LITRES/SEC"):
         return 1.0
@@ -318,7 +284,7 @@ def unit_to_LPS_factor(units: str) -> float:
         return 1.0 / 86400.0
     if u in ("MLD",):
         return 1e6 / 86400.0
-    # 其他单位你可以按需要补
+
     raise ValueError(f"Unsupported Units='{units}'. Please add conversion.")
 def add_euclid_dist_to_source_features(
     df_nodes: pd.DataFrame,
@@ -330,16 +296,10 @@ def add_euclid_dist_to_source_features(
     eps: float = 1e-12,
     use_log1p: bool = True,
 ) -> pd.DataFrame:
-    """
-    处理节点信息表计算得“到水源欧式距离”属性
-    新增：
-      - dist_to_source_euclid
-      - dist_to_source_euclid_norm
-      - dist_to_source_euclid_log_norm (若 use_log1p=True)
-    """
+    """Add node features measuring Euclidean distance to the nearest water source."""
     df = df_nodes.copy()
 
-    # 坐标检查
+
     if not {x_col, y_col}.issubset(df.columns):
         df["dist_to_source_euclid"] = np.nan
         df["dist_to_source_euclid_norm"] = np.nan
@@ -350,12 +310,12 @@ def add_euclid_dist_to_source_features(
     xs = df[x_col].to_numpy(dtype=float)
     ys = df[y_col].to_numpy(dtype=float)
 
-    # 处理坐标缺失：NaN 的点先记 NaN，后面统一填充
+
     finite_xy = np.isfinite(xs) & np.isfinite(ys)
 
-    # 找水源集合（Reservoir/Tank）
+
     if type_col not in df.columns:
-        raise ValueError(f"df_nodes 缺少列 {type_col}，无法识别水源节点。")
+        raise ValueError(f"df_nodes is missing column {type_col}; cannot identify source nodes.")
 
     t = df[type_col].astype(str).str.lower()
     is_source = np.zeros(len(df), dtype=bool)
@@ -364,34 +324,34 @@ def add_euclid_dist_to_source_features(
 
     src_idx = np.flatnonzero(is_source & finite_xy)
     if src_idx.size == 0:
-        # 没有水源坐标：退化为 NaN（或全0）
+
         df["dist_to_source_euclid"] = np.nan
         df["dist_to_source_euclid_norm"] = np.nan
         if use_log1p:
             df["dist_to_source_euclid_log_norm"] = np.nan
         return df
 
-    # 计算到最近水源的欧氏距离：对每个点取 min_j ||p_i - s_j||
-    # 向量化实现： (N,1,2) - (1,S,2) -> (N,S,2)
+
+
     P = np.stack([xs, ys], axis=1)             # (N,2)
     S = P[src_idx, :]                          # (S,2)
 
     d = np.full(len(df), np.nan, dtype=float)
 
-    # 只对 finite_xy 的点计算
+
     P_f = P[finite_xy]                         # (Nf,2)
     diff = P_f[:, None, :] - S[None, :, :]     # (Nf,S,2)
     dist = np.sqrt(np.sum(diff * diff, axis=2))# (Nf,S)
     d_min = np.min(dist, axis=1)               # (Nf,)
     d[finite_xy] = d_min
 
-    # 如果有 NaN（坐标缺失）可用最大值填充（表示“很远/未知”）
+
     if np.any(~np.isfinite(d)):
         finite_d = d[np.isfinite(d)]
         fill = float(np.max(finite_d)) if finite_d.size > 0 else 0.0
         d = np.where(np.isfinite(d), d, fill)
 
-    # max 归一化
+
 
 
     if use_log1p:
@@ -405,11 +365,7 @@ def add_euclid_dist_to_source_features(
 
 
 def parse_inp_links_with_meta(inp_path: str) -> List[Dict[str, Any]]:
-    """
-    解析inp图结构边信息——>元变量
-    Parse links from .inp with lightweight edge metadata.
-    Stable fields only: endpoints + coarse type + pipe length(if available).
-    """
+    """Parse link endpoints and attributes from an INP file."""
     links: List[Dict[str, Any]] = []
     section = None
 
@@ -506,7 +462,7 @@ def _guess_edge_features_csv_from_nodes_csv(nodes_csv: str) -> Optional[str]:
 
 
 def _get_method_cfg(cfg_list: Optional[List[Dict[str, Any]]], method: str) -> Dict[str, Any]:
-    """从 cfg_list 中取出对应 method 的 cfg（找不到则返回空 dict）。"""
+    """Return the configuration for a method, or an empty dictionary."""
     if not cfg_list:
         return {}
     for item in cfg_list:
@@ -519,10 +475,10 @@ def load_graph_data(
     edge_feat_csv: str,
     inp_path: str,
     drop_non_junction: bool = False,
-    standardize: bool = True,#节点特征标准化，如坐标，中心距离等（受规模影响范围大）
+    standardize: bool = True,
     *,
-    x_mode: str = "full",   # 新增：full / ones / degree / ones+degree
-    return_graph_struct: bool = False,  # 新增：是否返回轻量物理注入所需图结构
+    x_mode: str = "full",
+    return_graph_struct: bool = False,
     filter_negative_demand_junctions: bool = True,
 ) -> Tuple[
     np.ndarray,          # X_all
@@ -538,10 +494,10 @@ def load_graph_data(
     import pandas as pd
     import numpy as np
 
-    # ---------- 1. 读全量节点 ----------
+
     df_all = pd.read_csv(nodes_csv)
 
-    # --- 修正排序逻辑：数值 ID 在前，非数值 ID 在后 ---
+
     node_num = pd.to_numeric(df_all["node"], errors="coerce")
     df_all = df_all.assign(
         node_num=node_num,
@@ -558,24 +514,24 @@ def load_graph_data(
     else:
         df_nodes = df_all.copy()
 
-    # 节点 ID & 映射（全图）
+
     node_ids: List[str] = df_nodes["node"].astype(str).tolist()
     id2idx: Dict[str, int] = {nid: i for i, nid in enumerate(node_ids)}
 
-    # ---------- 1.4 Junction 子集 ----------
+
     if "type" not in df_nodes.columns:
-        raise ValueError("nodes_feature.csv 中缺少 'type' 列。")
+        raise ValueError("nodes_feature.csv is missing the 'type' column.")
     type_series = df_nodes["type"].astype(str)
     junction_mask = (type_series == "Junction").to_numpy()
     if filter_negative_demand_junctions and "base_demand" in df_nodes.columns:
-        # 负需求 junction 通常更像补给/边界等建模节点，不作为泄漏/传感器候选；
-        # 节点仍保留在全图中，避免破坏拓扑路径和边结构。
+
+
         base_demand_all = pd.to_numeric(df_nodes["base_demand"], errors="coerce").to_numpy(dtype=float)
         neg_junction_mask = junction_mask & np.isfinite(base_demand_all) & (base_demand_all < 0)
         if np.any(neg_junction_mask):
             skipped = df_nodes.loc[neg_junction_mask, "node"].astype(str).tolist()
             print(
-                f"[data_utils] 从候选集合剔除 {len(skipped)} 个负需求 junction: "
+                f"[data_utils] Excluded {len(skipped)} junctions with negative demand from the candidate set: "
                 f"{skipped[:8]}{'...' if len(skipped) > 8 else ''}"
             )
             junction_mask = junction_mask & (~neg_junction_mask)
@@ -583,7 +539,7 @@ def load_graph_data(
     junction_node_ids = [node_ids[i] for i in junction_indices]
     print(f"[data_utils] Junction subset size = {len(junction_indices)}.")
 
-    # ---------- 2. 边 ----------
+
     edge_feat_df = None
 
     if edge_feat_csv is not None:
@@ -667,7 +623,7 @@ def load_graph_data(
     edges_idx = np.array(edges, dtype=np.int64)
     print(f"[data_utils] Loaded {len(edges_idx)} edges (between selected nodes).")
 
-    # ---------- 3. 邻接矩阵（结构无 self-loop） ----------
+
     N = df_nodes.shape[0]
     A = np.zeros((N, N), dtype=np.float32)
     for iu, iv in edges_idx:
@@ -675,10 +631,10 @@ def load_graph_data(
         A[iv, iu] = 1.0
     np.fill_diagonal(A, 0.0)
 
-    # 原始结构度（不含 self-loop）——给 degree 特征用
+
     deg_raw = A.sum(axis=1).astype(np.float32)
 
-    # ---------- 3.1 GCN 归一化（训练用，可用 A+I） ----------
+
     A_tilde = A + np.eye(N, dtype=np.float32)
     deg_tilde = A_tilde.sum(axis=1)
     deg_inv_sqrt = np.zeros_like(deg_tilde, dtype=np.float32)
@@ -686,14 +642,14 @@ def load_graph_data(
     D_inv_sqrt = np.diag(deg_inv_sqrt.astype(np.float32))
     A_norm = D_inv_sqrt @ A_tilde @ D_inv_sqrt
 
-    # ---------- 1.1~1.3 构造 X（根据 x_mode 切换） ----------
+
     x_mode = str(x_mode).lower()
 
     if x_mode == "full":
-        # ---------- 1.1 数值特征 ----------
+
         feature_cols = [c for c in NUMERIC_NODE_FEATURES if c in df_nodes.columns]
         if not feature_cols:
-            raise ValueError("nodes_feature.csv 中没有可用的数值特征列，请检查。")
+            raise ValueError("nodes_feature.csv has no usable numeric feature columns.")
 
         df_num = df_nodes[feature_cols].astype(float)
 
@@ -715,7 +671,7 @@ def load_graph_data(
         for i, t in enumerate(type_series):
             X_type[i, type_to_idx[t]] = 1.0
 
-        # ---------- 1.3 标准化数值特征 + 拼接 ----------
+
         if standardize:
             mean = X_num.mean(axis=0, keepdims=True)
             std = X_num.std(axis=0, keepdims=True) + 1e-8
@@ -732,14 +688,14 @@ def load_graph_data(
         )
 
     elif x_mode == "ones":
-        # 纯结构：全 1 占位，不含任何节点属性
+
         X = np.ones((N, 1), dtype=np.float32)
         print("[data_utils] X_mode=ones, feature dim = 1 (no node attributes).")
 
 
     elif x_mode == "degree":
 
-        # 纯结构：用原始度（不含 self-loop）
+
 
         X = deg_raw.reshape(-1, 1).astype(np.float32)
 
@@ -768,7 +724,7 @@ def load_graph_data(
     if not return_graph_struct:
         return X, A, A_norm, node_ids, id2idx, edges_idx, df_nodes, junction_indices, junction_node_ids
 
-    # ---------- 4. 轻量物理注入图结构 ----------
+
     E = int(edges_idx.shape[0])
     edge_index = edges_idx.T.astype(np.int64) if E > 0 else np.zeros((2, 0), dtype=np.int64)
 

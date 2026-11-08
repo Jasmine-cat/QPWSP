@@ -55,10 +55,7 @@ def load_RS(
     R_path: str,
     S_path: str,
 ) -> Tuple[list, list]:
-    """
-    假设 R_path, S_path 是用 np.save(..., allow_pickle=True) 保存的 object 数组，
-    这里统一转成 Python list[ndarray].
-    """
+    """Load residual and signature arrays from NumPy files."""
     R_obj = np.load(R_path, allow_pickle=True)
     S_obj = np.load(S_path, allow_pickle=True)
     R_list = list(R_obj)

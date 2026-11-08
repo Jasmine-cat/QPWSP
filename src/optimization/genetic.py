@@ -9,18 +9,18 @@ from src.qubo.objective import compute_qubo_component_stats, extract_qubo_total,
 def solve_qubo_ga_energy_soft_budget(
     Q_dist_np: Dict[str, np.ndarray],
     const_dist: Dict[str, Any],
-    K_budget: int,  # 仅用于初始化/统计；Q_total里已编码K也没问题
+    K_budget: int,
     # --- GA hyperparams ---
     pop_size: int = 80,
-    max_iters: int = 300,          # generation 数（对齐A1命名）
+    max_iters: int = 300,
     elite_frac: float = 0.1,
     tournament_k: int = 3,
     cx_rate: float = 0.9,
-    mut_rate: float = 0.02,        # bit-flip 概率（对每个位）
-    # --- init control (soft-budget 但建议围绕K初始化) ---
+    mut_rate: float = 0.02,
+
     init_mode: str = "bernoulli",  # "bernoulli" | "near_k"
-    init_p: Optional[float] = None,  # bernoulli概率，None则用K/N
-    near_k_jitter: int = 2,          # near_k: 在K的基础上±jitter个bit扰动
+    init_p: Optional[float] = None,
+    near_k_jitter: int = 2,
     # --- rng / budget ---
     seed: int = 0,
     time_budget_sec: Optional[float] = None,

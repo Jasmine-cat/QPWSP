@@ -1,4 +1,4 @@
-"""运行 V1 主线的预算敏感性实验。"""
+"""Run sensor-budget sensitivity experiments."""
 
 from __future__ import annotations
 

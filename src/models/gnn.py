@@ -1,4 +1,4 @@
-"""正式实验使用的基础 GCN 与物理边门控 PIGNN。"""
+"""Graph convolution and optional edge-gated message-passing models."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 
 class SimpleGCN(nn.Module):
-    """不使用管段物理特征时的拓扑基线网络。"""
+    """Graph convolutional baseline without physical edge attributes."""
 
     def __init__(self, in_dim: int, hidden_dim: int = 64, num_layers: int = 2, dropout: float = 0.0):
         super().__init__()
@@ -30,7 +30,7 @@ class SimpleGCN(nn.Module):
 
 
 class LightPhysicsGNN(nn.Module):
-    """具有可学习物理边门控的节点-边消息传递网络。"""
+    """Node-edge message-passing network with an optional learned edge gate."""
 
     def __init__(
         self,
@@ -76,13 +76,13 @@ class LightPhysicsGNN(nn.Module):
                 nn.Linear(self.hidden_dim, 1),
                 nn.Sigmoid(),
             )
-            # 初始门控接近 1，避免训练初期过度削弱管段消息。
+            # Initialize the gate near one to avoid suppressing messages early in training.
             nn.init.constant_(self.edge_gate[-2].bias, 2.0)
         else:
             self.edge_gate = None
 
     def compute_edge_gate(self, edge_attr: torch.Tensor) -> torch.Tensor:
-        """返回每条管段的消息通过强度。"""
+        """Return the message gate for each link."""
         if self.edge_gate is None:
             return torch.ones(edge_attr.shape[0], dtype=edge_attr.dtype, device=edge_attr.device)
         return self.edge_gate(edge_attr).squeeze(-1)

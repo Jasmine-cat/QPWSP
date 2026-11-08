@@ -124,37 +124,13 @@ def generate_RS_from_inp(
     _rs_retry_depth: int = 0,
     overwrite: bool = False,
 ) -> Dict[str, Any]:
-    """
-    从 .inp 文件生成 R, S 矩阵（Python 版复刻 Matlab 逻辑）。
-
-    Parameters
-    ----------
-    inp_path : str
-        EPANET .inp 文件路径
-    out_npz : str
-        输出 npz 文件路径
-    leak_factor : float
-        兼容旧参数，当前不再用于生成泄露强度（保留仅避免调用方报错）。
-    n_leak_levels : int
-        泄露强度级数（用于生成以 chosen_beta 为中心的倍率序列）
-    q0_json_path : str | None
-        可选，显式指定 q0.json 路径；若不提供，则自动按 inp_name 在 node_features_dir 下寻找。
-    node_features_dir : str | None
-        q0.json 所在目录（默认: <repo>/data/features）
-    factor_min/factor_max : float
-        生成倍率区间 [factor_min, factor_max]，并按几何序列均匀采样 n_leak_levels 个因子。
-
-    Returns
-    -------
-    info : dict
-        一些关键信息（节点数、泄露强度、运行时间等）
-    """
+    """Generate residual and dictionary assets from an EPANET input network."""
     if Path(out_npz).exists() and not overwrite:
         raise FileExistsError(f"Refusing to overwrite existing RS asset: {out_npz}")
-    print(f"[RS] 读取网络: {inp_path}")
+    print(f"[RS] Loading network: {inp_path}")
     wn = wntr.network.WaterNetworkModel(inp_path)
 
-    # --- 1. 基本节点信息 ---
+
     all_junction_names = list(wn.junction_name_list)
     all_junction_nodes = [wn.get_node(name) for name in all_junction_names]
     all_base_demands = np.array(
@@ -167,18 +143,18 @@ def generate_RS_from_inp(
     ]
     if skipped_negative:
         print(
-            f"[RS] 从泄漏/传感器候选集合剔除 {len(skipped_negative)} 个负需求 junction: "
+            f"[RS] Excluded {len(skipped_negative)} junctions with negative demand from the candidate set: "
             f"{skipped_negative[:8]}"
             f"{'...' if len(skipped_negative) > 8 else ''}"
         )
     junction_names = [name for name, keep in zip(all_junction_names, keep_junction) if bool(keep)]
     if len(junction_names) == 0:
-        raise ValueError(f"[RS][{Path(inp_path).stem}] 没有可用的非负需求 junction 候选节点。")
+        raise ValueError(f"[RS][{Path(inp_path).stem}] No eligible junctions with nonnegative demand remain.")
     reservoir_names = list(wn.reservoir_name_list)
     jun_num = len(junction_names)
-    print(f"[RS] Junction 数量: {jun_num}, Reservoir 数量: {len(reservoir_names)}")
+    print(f"[RS] Junction count: {jun_num}, Reservoir count: {len(reservoir_names)}")
 
-    # junction 节点对象和基准需求
+
     junction_nodes = [wn.get_node(name) for name in junction_names]
     base_demands = np.array(
         [jn.demand_timeseries_list[0].base_value for jn in junction_nodes],
@@ -237,8 +213,8 @@ def generate_RS_from_inp(
 
     wn._experiment_evaluation_time_s = selected_ptime_s_disk
 
-    # --- 2. 基准工况模拟（无泄漏） ---
-    print("[RS] 运行基准工况（无泄漏）模拟 ...")
+
+    print("[RS] Running the no-leak baseline simulation ...")
     print(
         "[RS] baseline time settings from step1 meta: "
         f"duration={duration_cfg_s}, report_step={report_step_cfg_s}, hyd_step={hyd_step_cfg_s}"
@@ -251,16 +227,16 @@ def generate_RS_from_inp(
     )
     T = np_origin.shape[0]
 
-    print(f"[RS] 基准模拟时间步数 T = {T}")
-    print("[RS] np_origin 形状:", np_origin.shape)
+    print(f"[RS] Baseline simulation timesteps T = {T}")
+    print("[RS] np_origin shape:", np_origin.shape)
 
-    # --- 3. 计算“全网最低压时刻” min_ptime_idx ---
-    # Matlab 中：
-    #   对每个节点 i: 找到压强最小时刻 index(i)；
+
+
+
     #   min_ptime = mode(index)
-    # 这里等价实现：
-    # --- 4. 计算 LDD，并以 chosen_beta 为中间值构造 q_levels ---
-    # Matlab 里： LDD = 平均 junction 基准需求
+
+
+
     if selected_ptime_s_disk is not None:
         selected_ptime_s = int(selected_ptime_s_disk)
         min_ptime_idx = _strict_find_time_index(times, selected_ptime_s, inp_name)
@@ -346,14 +322,14 @@ def generate_RS_from_inp(
     print(f"[RS] chosen_beta (from q0) = {chosen_beta:.6g}  (q0_json={q0_json_path})")
     print("[RS] leak factors =", factors)
     print("[RS] beta_levels =", beta_levels)
-    print("[RS] 泄露强度级数 q_levels =", q_levels)
+    print("[RS] Leak magnitude levels q_levels =", q_levels)
     if int(_rs_retry_depth) > 0:
         print(
-            f"[RS] 当前为强度降级重试结果：retry_depth={int(_rs_retry_depth)}, "
+            f"[RS] Reduced-flow retry result: retry_depth={int(_rs_retry_depth)}, "
             f"retry_factor={float(rs_high_failure_retry_factor):.6g}"
         )
 
-    # --- 5. 枚举泄露强度对 (q1, q2)，生成 R, S ---
+
     # Matlab: pair = length(qrand)*(length(qrand)-1)/2
     pairs: list[Tuple[int, int]] = []
     L = len(q_levels)
@@ -361,7 +337,7 @@ def generate_RS_from_inp(
         for j in range(i + 1, L):
             pairs.append((i, j))
     K_pairs = len(pairs)
-    print(f"[RS] 泄露强度组合个数 K_pairs = {K_pairs} (与 Matlab pair 一致)")
+    print(f"[RS] Leak magnitude pairs K_pairs = {K_pairs} (matching the MATLAB pairs)")
 
     # Each level/node is simulated once. Failure is missing data, never zero signal.
     responses = np.full((L, jun_num, jun_num), np.nan)
@@ -408,14 +384,14 @@ def generate_RS_from_inp(
     failed_col_fill_value = float("nan")
 
     elapsed = time.time() - t0
-    print(f"\n[RS] 所有组合模拟完毕，总耗时 {elapsed:.2f} 秒")
+    print(f"\n[RS] All scenario pairs completed in {elapsed:.2f} s")
     if failed_details:
         print(
-            f"[RS][WARN] 节点级仿真失败总数={len(failed_details)} "
+            f"[RS][WARN] Node-level simulation failures={len(failed_details)} "
             f"(marked invalid, excluded by the common scenario mask)"
         )
 
-    # --- 6. 组装为 3D 数组并存盘 ---
+
     if len(S_list) == 0 or len(R_list) == 0:
         raise RuntimeError(
             "No successful leakage pairs were generated; abort writing RS npz."
@@ -472,7 +448,7 @@ def generate_RS_from_inp(
         if os.path.exists(tmp_npz):
             os.remove(tmp_npz)
         raise
-    print(f"[RS] 已保存到: {out_npz}")
+    print(f"[RS] Saved to: {out_npz}")
 
     info: Dict[str, Any] = {
         "inp_path": inp_path,
@@ -482,7 +458,7 @@ def generate_RS_from_inp(
         "n_pairs_attempted": K_pairs,
         "n_pairs_kept": len(pair_indices_kept),
         "n_pairs_skipped": K_pairs - len(pair_indices_kept),
-        # 兼容旧字段名：现在存放节点级失败详情。
+
         "skipped_details": failed_details,
         "n_node_level_failures": len(failed_details),
         "failed_fill_value": float(failed_col_fill_value),
